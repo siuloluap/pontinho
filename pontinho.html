@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Pontinho 🃏</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a2712; font-family: Georgia, serif; }
+  #root { min-height: 100vh; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+// Change this to your deployed server URL
+const SERVER_URL = "https://pontinho-server-production.up.railway.app";
+
+// ─── Socket.io client (loaded from CDN) ──────────────────────────────────────
+// Add to your HTML: <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+// Or in React app: npm install socket.io-client and import { io } from "socket.io-client"
+let _socket = null;
+function getSocket() {
+  if (!_socket) {
+    // Expects socket.io-client loaded globally or via import
+    _socket = io(SERVER_URL, { transports: ["websocket"] });
+  }
+  return _socket;
+}
+
+const SUITS = ["♠", "♥", "♦", "♣"];
+const RANKS = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+const RANK_VALUES = { A:15, 2:2, 3:3, 4:4, 5:5, 6:6, 7:7, 8:8, 9:9, 10:10, J:10, Q:10, K:10 };
+
+function buildDoubleDeck() {
+  const deck = [];
+  let id = 0;
+  for (let d = 0; d < 2; d++) {
+    for (const suit of SUITS)
+      for (const rank of RANKS)
+        deck.push({ id: id++, rank, suit, isJoker: false, isWild: false });
+    deck.push({ id: id++, rank: "JK", suit: "★", isJoker: true, isWild: true });
+    deck.push({ id: id++, rank: "JK", suit: "★", isJoker: true, isWild: true });
+  }
+  return deck;
+}
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function markWilds(deck, cutCard) {
+  if (!cutCard) return deck;
+  const rankIdx = RANKS.indexOf(cutCard.rank);
+  const wildRank = RANKS[(rankIdx + 1) % RANKS.length];
+  const wildSuit = cutCard.suit;
+  return deck.map(c => ({ ...c, isWild: c.isJoker || (c.rank === wildRank && c.suit === wildSuit) }));
+}
+
+function cardPoints(card) {
+  if (card.isWild) return 20;
+  return RANK_VALUES[card.rank] || 0;
+}
+
+function cardColor(card) {
+  if (card.isJoker) return "#e74c3c";
+  return card.suit === "♥" || card.suit === "♦" ? "#c0392b" : "#1a1a2e";
+}
+
+function getRankIndex(rank) { return RANKS.indexOf(rank); }
+
+// Retorna os índices de rank para uma sequência, tratando Ás como alto (13)
+// se a sequência claramente termina em Ás (ex: Q,K,A ou K,A)
+// Nunca permite dois Ases na mesma sequência.
+function runIndices(nonWild) {
+  const hasAce = nonWild.some(c => c.rank === "A");
+  const hasLowCard = nonWild.some(c => ["2","3","4","5","6","7"].includes(c.rank));
+  // Ás alto: aparece com cartas altas (9,10,J,Q,K) e sem cartas baixas
+  // Cobre também quando o K é o coringa: ex 10,J,Q,A onde coringa=K
+  if (hasAce && !hasLowCard) {
+    const highCards = ["9","10","J","Q","K"];
+    const hasHighCard = nonWild.some(c => highCards.includes(c.rank));
+    if (hasHighCard) {
+      return nonWild.map(c => c.rank === "A" ? 13 : getRankIndex(c.rank));
+    }
+  }
+  // Ás baixo (padrão): índice 0
+  return nonWild.map(c => getRankIndex(c.rank));
+}
+
+function canFormSequence(cards) {
+  const nonWild = cards.filter(c => !c.isWild);
+  if (nonWild.length === 0) return false;
+  const wildCount = cards.filter(c => c.isWild).length;
+  const suits = nonWild.map(c => c.suit);
+  if (!suits.every(s => s === suits[0])) return false;
+  // Não pode ter dois Ases
+  if (nonWild.filter(c => c.rank === "A").length > 1) return false;
+  // Não pode ter cartas de mesmo rank duplicado numa sequência
+  const rankCounts = {};
+  for (const c of nonWild) rankCounts[c.rank] = (rankCounts[c.rank] || 0) + 1;
+  if (Object.values(rankCounts).some(v => v > 1)) return false;
+
+  const sorted = [...nonWild].sort((a, b) => getRankIndex(a.rank) - getRankIndex(b.rank));
+  const indices = runIndices(sorted).sort((a, b) => a - b);
+  const span = indices[indices.length - 1] - indices[0];
+  const gaps = span - (nonWild.length - 1);
+  // Each wild fills exactly one gap
+  return gaps <= wildCount && cards.length >= 3;
+}
+
+function wildIsInCenter(cards) {
+  // Coringa só pode estar no meio — nunca nas pontas em rodadas normais.
+  // Se há um coringa especial (não-joker) que pode agir como carta normal,
+  // trata-o como normal para verificar se o Joker fica no centro.
+  let effective = cards;
+  const specialWilds = cards.filter(c => c.isWild && !c.isJoker);
+  if (specialWilds.length > 0) {
+    // Tenta tratar cada coringa especial como carta normal
+    for (const sw of specialWilds) {
+      const asNormal = cards.map(c => c.id === sw.id ? { ...c, isWild: false } : c);
+      const nw = asNormal.filter(c => !c.isWild).sort((a, b) => getRankIndex(a.rank) - getRankIndex(b.rank));
+      if (nw.length >= 2) { effective = asNormal; break; }
+    }
+  }
+  const nonWild = effective.filter(c => !c.isWild).sort((a, b) => getRankIndex(a.rank) - getRankIndex(b.rank));
+  if (nonWild.length < 2) return false;
+  const indices = runIndices(nonWild).sort((a, b) => a - b);
+  const span = indices[indices.length - 1] - indices[0];
+  const gaps = span - (nonWild.length - 1);
+  return gaps >= 1;
+}
+
+function isValidMeld(cards, isBaterRound) {
+  if (cards.length < 3) return false;
+
+  // Special case: if a non-joker wild can act as its real card value,
+  // try treating it as normal first (allows using it alongside another wild)
+  const specialWilds = cards.filter(c => c.isWild && !c.isJoker);
+  if (specialWilds.length > 0) {
+    // Try treating each special wild as its real card value
+    for (const sw of specialWilds) {
+      const asNormal = { ...sw, isWild: false };
+      const testCards = cards.map(c => c.id === sw.id ? asNormal : c);
+      const result = isValidMeld(testCards, isBaterRound);
+      if (result) return result; // valid when used as real card
+    }
+  }
+
+  const nonWild = cards.filter(c => !c.isWild);
+  const wildCount = cards.filter(c => c.isWild).length;
+  if (wildCount > 1) return false;
+
+  if (nonWild.length >= 2) {
+    const ranks = nonWild.map(c => c.rank);
+    if (ranks.every(r => r === ranks[0]) && cards.length <= 6) {
+      const suitCount = {};
+      for (const c of nonWild) suitCount[c.suit] = (suitCount[c.suit] || 0) + 1;
+      const distinctSuits = Object.keys(suitCount).length;
+      const maxPerSuit = Math.max(...Object.values(suitCount));
+      if (distinctSuits <= 3 && maxPerSuit <= 2) {
+        if (wildCount > 0 && !isBaterRound) return false;
+        return "set";
+      }
+    }
+  }
+
+  if (nonWild.length >= 2) {
+    const suits = nonWild.map(c => c.suit);
+    if (suits.every(s => s === suits[0]) && canFormSequence(cards)) {
+      if (wildCount > 0 && !isBaterRound && !wildIsInCenter(cards)) return false;
+      return "run";
+    }
+  }
+  return false;
+}
+
+// Se um coringa especial (não-joker) está sendo usado pelo seu valor real
+// num jogo (ex: 7♥ numa sequência 5♥,6♥,7♥), marca actingAsNormal=true.
+// Isso impede deslocamento e exibe a carta normalmente.
+function normalizeWildsInMeld(cards) {
+  const wilds = cards.filter(c => c.isWild && !c.isJoker);
+  if (wilds.length === 0) return cards;
+  // Tenta ver se o jogo é válido sem contar o coringa como coringa
+  // (ou seja, tratando-o como carta normal pelo seu valor real)
+  return cards.map(c => {
+    if (!c.isWild || c.isJoker) return c;
+    // Tenta o jogo sem este coringa agindo como coringa
+    const asNormal = { ...c, isWild: false };
+    const testCards = cards.map(x => x.id === c.id ? asNormal : x);
+    if (isValidMeld(testCards, true)) {
+      // Carta funciona pelo valor real — marca como normal no meld
+      return { ...c, isWild: false, wasWild: true, actingAsNormal: true };
+    }
+    return c;
+  });
+}
+
+// Gera todas as combinações de tamanho k de um array
+function combinations(arr, k) {
+  if (k === 0) return [[]];
+  if (arr.length < k) return [];
+  const [first, ...rest] = arr;
+  const withFirst = combinations(rest, k - 1).map(c => [first, ...c]);
+  const withoutFirst = combinations(rest, k);
+  return [...withFirst, ...withoutFirst];
+}
+
+// Verifica se o jogador pode bater nesse turno com a mão dada (isBater=true)
+// Considera também adicionar cartas a jogos existentes na mesa
+function canPlayerWinThisTurn(hand, tableMelds) {
+  if (hand.length === 0) return false;
+  return tryWin(hand, tableMelds || [], 0);
+}
+
+function tryWin(remaining, tableMelds, depth) {
+  if (depth > 8) return false;
+  if (remaining.length <= 1) return true;
+
+  // Opção 1: formar novo jogo com cartas da mão
+  for (let size = 3; size <= Math.min(remaining.length, 6); size++) {
+    const combos = combinations(remaining, size);
+    for (const combo of combos) {
+      if (isValidMeld(combo, true)) {
+        const newRemaining = remaining.filter(c => !combo.includes(c));
+        if (tryWin(newRemaining, tableMelds, depth + 1)) return true;
+      }
+    }
+  }
+
+  // Opção 2: adicionar 1+ cartas da mão a jogo existente na mesa
+  for (let mi = 0; mi < tableMelds.length; mi++) {
+    const meld = tableMelds[mi];
+    for (let size = 1; size <= Math.min(remaining.length - 1, 4); size++) {
+      const combos = combinations(remaining, size);
+      for (const combo of combos) {
+        const combined = [...meld.cards, ...combo];
+        if (isValidMeld(combined, true)) {
+          const newRemaining = remaining.filter(c => !combo.includes(c));
+          // Update meld in table for next recursion
+          const newMelds = tableMelds.map((m, i) => i === mi ? { ...m, cards: combined } : m);
+          if (tryWin(newRemaining, newMelds, depth + 1)) return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+
+function sortMeldCards(cards, type) {
+  if (type !== "run") return cards;
+  const nonWild = cards.filter(c => !c.isWild).sort((a, b) => getRankIndex(a.rank) - getRankIndex(b.rank));
+  const wilds = cards.filter(c => c.isWild);
+  if (nonWild.length === 0) return cards;
+  // Use high-ace indices if applicable
+  const idxMap = runIndices(nonWild);
+  const pairs = nonWild.map((c, i) => ({ card: c, idx: idxMap[i] })).sort((a, b) => a.idx - b.idx);
+  const minIdx = pairs[0].idx;
+  const maxIdx = pairs[pairs.length - 1].idx;
+  const sorted = [];
+  let wi = 0;
+  for (let i = minIdx; i <= maxIdx; i++) {
+    const p = pairs.find(p => p.idx === i);
+    if (p) sorted.push(p.card);
+    else if (wi < wilds.length) sorted.push(wilds[wi++]);
+  }
+  while (wi < wilds.length) sorted.push(wilds[wi++]);
+  return sorted;
+}
+
+function resolveRunSlots(cards) {
+  const nonWild = cards.filter(c => !c.isWild).sort((a, b) => getRankIndex(a.rank) - getRankIndex(b.rank));
+  const wild = cards.find(c => c.isWild && !c.actingAsNormal);
+  const suit = nonWild[0] ? nonWild[0].suit : "?";
+  if (!nonWild.length) return cards.map(c => ({ card: c, displayRank: "?", displaySuit: suit, isWildSlot: true }));
+  const idxMap = runIndices(nonWild);
+  const pairs = nonWild.map((c, i) => ({ card: c, idx: idxMap[i] })).sort((a, b) => a.idx - b.idx);
+  const minIdx = pairs[0].idx;
+  const maxIdx = pairs[pairs.length - 1].idx;
+  // For display: index 13 maps to "A" (high ace)
+  const idxToRank = i => i === 13 ? "A" : RANKS[i];
+  const slots = [];
+  let wildUsed = false;
+  for (let i = minIdx; i <= maxIdx; i++) {
+    const p = pairs.find(p => p.idx === i);
+    if (p) {
+      slots.push({ card: p.card, displayRank: p.card.rank, displaySuit: suit, isWildSlot: false });
+    } else if (wild && !wildUsed) {
+      wildUsed = true;
+      slots.push({ card: wild, displayRank: idxToRank(i), displaySuit: suit, isWildSlot: true });
+    }
+  }
+  if (wild && !wildUsed) {
+    const afterIdx = maxIdx + 1;
+    if (afterIdx <= 13)
+      slots.push({ card: wild, displayRank: idxToRank(afterIdx), displaySuit: suit, isWildSlot: true });
+    else if (minIdx > 0)
+      slots.unshift({ card: wild, displayRank: idxToRank(minIdx - 1), displaySuit: suit, isWildSlot: true });
+  }
+  return slots;
+}
+
+function initGame(playerNames, dealerPlayer) {
+  let deck = shuffle(buildDoubleDeck());
+  const cutIdx = Math.floor(deck.length * 0.6) + Math.floor(Math.random() * Math.floor(deck.length * 0.2));
+  const cutCard = deck[cutIdx];
+  deck = markWilds(deck, cutCard);
+  const n = playerNames.length;
+  const hands = playerNames.map(() => []);
+  let dealIdx = (cutIdx + 1) % deck.length;
+  const dealt = new Set([cutIdx]);
+  for (let c = 0; c < 9; c++) {
+    for (let p = 0; p < n; p++) {
+      while (dealt.has(dealIdx)) dealIdx = (dealIdx + 1) % deck.length;
+      hands[p].push({ ...deck[dealIdx] });
+      dealt.add(dealIdx);
+      dealIdx = (dealIdx + 1) % deck.length;
+    }
+  }
+  const stock = deck.filter((_, i) => !dealt.has(i));
+  const dealer = dealerPlayer !== undefined ? dealerPlayer : 0;
+  const firstPlayer = (dealer + 1) % playerNames.length;
+  return {
+    phase: "playing",
+    players: playerNames.map((name, i) => ({ name, hand: hands[i], melds: [] })),
+    stock, discard: [], cutCard,
+    dealerPlayer: dealer,
+    currentPlayer: firstPlayer, turnPhase: "draw", selectedCards: [],
+    drewFromDiscard: false, drewFromDiscardCardId: null, meldsThisTurn: 0,
+    message: playerNames[firstPlayer] + ", é sua vez! Compre uma carta.",
+    scores: playerNames.map(() => 0), wins: playerNames.map(() => 0), round: 1,
+    lastAction: null,
+  };
+}
+
+// Pip layouts: [x%, y%] positions for each pip (0=top-left, 100=bottom-right)
+// x: 25=left col, 50=center, 75=right col
+// y: positions vary by count
+const PIP_LAYOUTS = {
+  "A":  [[50,50]],
+  "2":  [[50,22],[50,78]],
+  "3":  [[50,20],[50,50],[50,80]],
+  "4":  [[25,22],[75,22],[25,78],[75,78]],
+  "5":  [[25,20],[75,20],[50,50],[25,80],[75,80]],
+  "6":  [[25,20],[75,20],[25,50],[75,50],[25,80],[75,80]],
+  "7":  [[25,18],[75,18],[50,36],[25,55],[75,55],[25,76],[75,76]],
+  "8":  [[25,16],[75,16],[25,38],[75,38],[25,62],[75,62],[25,84],[75,84]],
+  "9":  [[25,15],[75,15],[25,35],[75,35],[50,50],[25,65],[75,65],[25,85],[75,85]],
+  "10": [[25,13],[75,13],[50,28],[25,42],[75,42],[25,58],[75,58],[50,72],[25,87],[75,87]],
+};
+
+const FIGURE_GLYPHS = { "J": "🃛", "Q": "🃝", "K": "🃞" };
+const FIGURE_LABELS = { "J": "J", "Q": "Q", "K": "K" };
+
+// wildCard: { rank, suit } — carta que este coringa representa (para exibição)
+function CardView({ card, selected, onClick, size, faceDown, wildCard }) {
+  const sz = size || "normal";
+  const dims = {
+    tiny:   { w: 34, h: 48, corner: 9,  pip: 8,  fig: 16, radius: 4 },
+    small:  { w: 50, h: 70, corner: 12, pip: 12, fig: 24, radius: 6 },
+    normal: { w: 62, h: 88, corner: 14, pip: 15, fig: 30, radius: 7 },
+    large:  { w: 74, h: 104, corner: 17, pip: 18, fig: 36, radius: 9 },
+  };
+  const d = dims[sz] || dims.normal;
+
+  if (faceDown) {
+    return (
+      <div onClick={onClick} style={{
+        width: d.w, height: d.h, borderRadius: d.radius, flexShrink: 0,
+        background: "repeating-linear-gradient(45deg,#1a3a6e,#1a3a6e 4px,#0f2a54 4px,#0f2a54 8px)",
+        border: "1.5px solid #0a1f40", boxShadow: "0 2px 6px #0005",
+        cursor: onClick ? "pointer" : "default",
+      }} />
+    );
+  }
+
+  const isRed = card.suit === "♥" || card.suit === "♦" || card.isJoker;
+  const color = isRed ? "#cc1111" : "#111";
+  const rank = card.isJoker ? "JK" : card.rank;
+  const suit = card.isJoker ? "🃏" : card.suit;
+  const bg = card.isWild ? "linear-gradient(160deg,#fffdf0,#fff5cc)" : "white";
+  const borderColor = selected ? "#f39c12" : card.isWild ? "#d4a017" : "#bbb";
+  const borderW = selected ? "2.5px" : "1.5px";
+  const wcIsRed = wildCard && (wildCard.suit === "♥" || wildCard.suit === "♦");
+  const wcColor = wcIsRed ? "#cc1111" : "#111";
+
+  // Inner area (between corners)
+  const innerPad = d.corner + 4;
+  const innerW = d.w - innerPad * 2;
+  const innerH = d.h - innerPad * 2;
+
+  const renderCenter = () => {
+    // Wildcard display
+    if (wildCard) {
+      return (
+        <div style={{
+          position:"absolute", top:"50%", left:"50%",
+          transform:"translate(-50%,-50%)",
+          display:"flex", flexDirection:"column", alignItems:"center",
+          lineHeight:1, pointerEvents:"none", textAlign:"center",
+        }}>
+          <div style={{ fontSize: d.pip * 1.1, fontWeight:900, color:wcColor }}>{wildCard.rank}</div>
+          <div style={{ fontSize: d.pip * 1.3, color:wcColor }}>{wildCard.suit}</div>
+          <div style={{ fontSize: d.pip * 0.8, color:"#b07000", fontWeight:700 }}>★</div>
+        </div>
+      );
+    }
+    // Joker center
+    if (card.isJoker) {
+      return (
+        <div style={{
+          position:"absolute", top:"50%", left:"50%",
+          transform:"translate(-50%,-50%)",
+          fontSize: d.fig * 0.9, lineHeight:1, pointerEvents:"none",
+        }}>🃏</div>
+      );
+    }
+    // Face cards (J, Q, K)
+    if (["J","Q","K"].includes(card.rank)) {
+      const figureIcon = { "J": "♟", "Q": "♛", "K": "♚" }[card.rank];
+      return (
+        <div style={{
+          position:"absolute", top:"50%", left:"50%",
+          transform:"translate(-50%,-50%)",
+          display:"flex", flexDirection:"column", alignItems:"center",
+          lineHeight:1, pointerEvents:"none", textAlign:"center",
+          gap: 1,
+        }}>
+          <div style={{ fontSize: d.fig * 0.72, color:"#111", lineHeight:1, opacity:0.9 }}>{figureIcon}</div>
+          <div style={{ fontSize: d.fig * 0.42, color, lineHeight:1, fontWeight:700, letterSpacing:-0.5 }}>{card.rank}</div>
+          <div style={{ fontSize: d.pip * 0.85, color, lineHeight:1 }}>{suit}</div>
+        </div>
+      );
+    }
+    // Number cards — pip layout
+    const pips = PIP_LAYOUTS[card.rank];
+    if (!pips) return null;
+    return (
+      <div style={{
+        position:"absolute",
+        left: innerPad, top: innerPad,
+        width: innerW, height: innerH,
+        pointerEvents:"none",
+      }}>
+        {pips.map(([px, py], i) => (
+          <div key={i} style={{
+            position:"absolute",
+            left: px + "%", top: py + "%",
+            transform:"translate(-50%,-50%)",
+            fontSize: d.pip, color, lineHeight:1,
+            // Pips in bottom half point down (rotated)
+            ...(py > 55 ? { transform:"translate(-50%,-50%) rotate(180deg)" } : {}),
+          }}>{suit}</div>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div onClick={onClick} style={{
+      width: d.w, height: d.h, borderRadius: d.radius, flexShrink: 0,
+      background: bg,
+      border: borderW + " solid " + borderColor,
+      boxShadow: selected ? "0 0 0 2px #f39c12, 0 4px 14px #0005" : "0 2px 5px #0003",
+      transform: selected ? "translateY(-10px) scale(1.07)" : "none",
+      transition: "transform 0.13s, box-shadow 0.13s",
+      userSelect: "none", cursor: onClick ? "pointer" : "default",
+      position: "relative", display: "flex", flexDirection: "column",
+      justifyContent: "space-between", alignItems: "stretch",
+      padding: "2px 3px", boxSizing: "border-box", overflow: "hidden",
+    }}>
+      {/* Top-left corner */}
+      <div style={{ color, lineHeight: 1, zIndex: 1 }}>
+        <div style={{ fontSize: d.corner, fontWeight: 800, lineHeight: 1.1 }}>{rank}</div>
+        <div style={{ fontSize: d.corner * 0.9, lineHeight: 1 }}>{card.isJoker ? "★" : suit}</div>
+      </div>
+
+      {/* Center content */}
+      {renderCenter()}
+
+      {/* Bottom-right corner (rotated) */}
+      <div style={{ color, lineHeight: 1, transform: "rotate(180deg)", alignSelf: "flex-end", zIndex: 1 }}>
+        <div style={{ fontSize: d.corner, fontWeight: 800, lineHeight: 1.1 }}>{rank}</div>
+        <div style={{ fontSize: d.corner * 0.9, lineHeight: 1 }}>{card.isJoker ? "★" : suit}</div>
+      </div>
+    </div>
+  );
+}
+
+
+// CARD SIZES
+const CARD_W = { tiny: 34, small: 50, normal: 62, large: 74 };
+const CARD_H = { tiny: 48, small: 70, normal: 88, large: 104 };
+const OVERLAP_HAND = 26;   // px visível de cada carta na mão (exceto última)
+const OVERLAP_RUN  = 22;   // px visível de cada carta em sequência na mesa
+
+function MeldDisplay({ meld, ownerName, onClick, highlight, highlightCardIds, isLastMeld, lastMeldRef }) {
+  const renderCards = () => {
+    if (meld.type === "run") {
+      const slots = resolveRunSlots(meld.cards);
+      const n = slots.length;
+      const totalW = n <= 1 ? CARD_W.large : OVERLAP_RUN * (n - 1) + CARD_W.large;
+      return (
+        <div style={{ position: "relative", width: totalW, height: CARD_H.large, flexShrink: 0 }}>
+          {slots.map((slot, i) => (
+            <div key={slot.card.id + "-" + i} style={{
+              position: "absolute", left: i * OVERLAP_RUN,
+              zIndex: i, filter: i === n - 1 ? "none" : "none",
+            }}>
+              {slot.isWildSlot
+                ? <CardView card={slot.card} size="large" wildCard={{ rank: slot.displayRank, suit: slot.displaySuit }} />
+                : <CardView card={slot.card} size="large" />
+              }
+            </div>
+          ))}
+        </div>
+      );
+    }
+    // Trinca: overlap horizontal por grupo de naipe, pilha vertical se duplicado
+    const groups = {};
+    const order = [];
+    for (const c of meld.cards) {
+      if (!groups[c.suit]) { groups[c.suit] = []; order.push(c.suit); }
+      groups[c.suit].push(c);
+    }
+    const groups_arr = order.map(suit => groups[suit]);
+    const PILE_OFFSET = 10;
+    const maxPile = Math.max(...groups_arr.map(p => p.length));
+    const containerH = CARD_H.large + (maxPile - 1) * PILE_OFFSET;
+    const totalW = groups_arr.reduce((acc, pile) => acc + CARD_W.large + 6, 0);
+    let xCursor = 0;
+    return (
+      <div style={{ position: "relative", height: containerH, width: totalW, flexShrink: 0 }}>
+        {groups_arr.map((pile, gi) => {
+          const x = xCursor;
+          xCursor += CARD_W.large + 6;
+          const isNewCard = (c) => highlightCardIds && highlightCardIds.has(c.id);
+          if (pile.length === 1) {
+            const glow = isNewCard(pile[0]) ? { filter: "drop-shadow(0 0 8px #f0d060) drop-shadow(0 0 16px #f0d060)" } : {};
+            return <div key={order[gi]} style={{ position: "absolute", left: x, top: (maxPile - 1) * PILE_OFFSET, ...glow }}><CardView card={pile[0]} size="large" /></div>;
+          } else {
+            return (
+              <div key={order[gi]} style={{ position: "absolute", left: x, top: 0, width: CARD_W.large, height: containerH }}>
+                {pile.map((c, i) => {
+                  const glow = isNewCard(c) ? { filter: "drop-shadow(0 0 8px #f0d060) drop-shadow(0 0 16px #f0d060)" } : {};
+                  return (
+                    <div key={c.id} style={{ position: "absolute", top: i * PILE_OFFSET, left: 0, ...glow }}>
+                      <CardView card={c} size="large" />
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          }
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div
+      ref={isLastMeld ? lastMeldRef : null}
+      onClick={onClick}
+      className="meld-enter"
+      style={{
+        background: highlight ? "rgba(201,168,76,0.15)" : "rgba(10,30,15,0.7)",
+        border: isLastMeld ? "2px solid #f0d060" : highlight ? "2px solid #f0d060" : "1px solid #3a6640",
+        borderRadius: 8, padding: "6px 8px",
+        cursor: onClick ? "pointer" : "default",
+        display: "inline-block", margin: "3px",
+        transition: "border-color 0.5s",
+      }}
+    >
+      <div style={{ fontSize: 9, color: "#7ab87a", marginBottom: 3, letterSpacing: 0.5 }}>{ownerName}</div>
+      <div style={{ display: "flex", alignItems: "flex-start" }}>{renderCards()}</div>
+    </div>
+  );
+}
+
+function SetupScreen({ onStart }) {
+  const [names, setNames] = useState(["", ""]);
+  const addPlayer = () => { if (names.length < 12) setNames([...names, ""]); };
+  const removePlayer = i => { if (names.length > 2) setNames(names.filter((_, j) => j !== i)); };
+  const update = (i, v) => { const n = [...names]; n[i] = v; setNames(n); };
+  const canStart = names.every(n => n.trim().length > 0);
+
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: "radial-gradient(ellipse at center, #1a472a 0%, #0d2b18 60%, #081a0f 100%)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontFamily: "Georgia, serif",
+    }}>
+      <div style={{
+        background: "linear-gradient(160deg,#1b3a28,#0f2419)", backdropFilter: "blur(10px)",
+        border: "2px solid #c9a84c", borderRadius: 20,
+        padding: "40px 48px", width: 380, color: "white",
+        boxShadow: "0 0 60px #00000088, inset 0 1px 0 #c9a84c44",
+      }}>
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{ fontSize: 52, filter: "drop-shadow(0 0 12px #c9a84c)" }}>🃏</div>
+          <h1 style={{ margin: "8px 0 4px", fontSize: 32, letterSpacing: 4, color: "#c9a84c", textShadow: "0 0 30px #c9a84c66" }}>PONTINHO</h1>
+          <p style={{ margin: 0, color: "#7ab87a", fontSize: 14, letterSpacing: 1 }}>Jogo de baralho em família</p>
+        </div>
+        <div style={{ marginBottom: 24 }}>
+          <label style={{ fontSize: 11, color: "#7ab87a", display: "block", marginBottom: 12, letterSpacing: 2, fontWeight: 700 }}>
+            JOGADORES ({names.length}/12)
+          </label>
+          {names.map((name, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <input
+                value={name}
+                onChange={e => update(i, e.target.value)}
+                placeholder={"Jogador " + (i + 1)}
+                style={{
+                  flex: 1, padding: "10px 14px", borderRadius: 8,
+                  border: "1px solid #3a6640",
+                  background: "rgba(0,0,0,0.35)", color: "#f0e6c8",
+                  fontSize: 15, outline: "none",
+                }}
+              />
+              {names.length > 2 && (
+                <button onClick={() => removePlayer(i)} style={{
+                  background: "rgba(231,76,60,0.3)", border: "none",
+                  borderRadius: 8, color: "#e74c3c", cursor: "pointer",
+                  padding: "0 12px", fontSize: 18,
+                }}>×</button>
+              )}
+            </div>
+          ))}
+          {names.length < 12 && (
+            <button onClick={addPlayer} style={{
+              width: "100%", padding: "9px", borderRadius: 8,
+              border: "1px dashed #3a6640",
+              background: "transparent", color: "#7ab87a", cursor: "pointer",
+              fontSize: 13, marginTop: 4,
+            }}>+ Adicionar jogador</button>
+          )}
+        </div>
+        <button
+          onClick={() => canStart && onStart(names.map(n => n.trim()))}
+          disabled={!canStart}
+          style={{
+            width: "100%", padding: "14px", borderRadius: 10,
+            background: canStart ? "linear-gradient(135deg,#8b6914,#c9a84c,#8b6914)" : "#2a3a2a",
+            border: "none", color: "white", fontSize: 17,
+            fontWeight: 700, cursor: canStart ? "pointer" : "not-allowed", letterSpacing: 2,
+            boxShadow: canStart ? "0 0 20px #c9a84c55" : "none",
+            border: "1px solid " + (canStart ? "#f0d060" : "#3a4a3a"),
+          }}
+        >INICIAR JOGO</button>
+      </div>
+    </div>
+  );
+}
+
+function btnSm(color) {
+  return {
+    background: color, border: "1px solid rgba(255,255,255,0.15)",
+    borderRadius: 6, color: "white",
+    padding: "5px 8px", fontSize: 11, cursor: "pointer", fontWeight: 700,
+    fontFamily: "Georgia, serif", whiteSpace: "nowrap",
+    boxShadow: "0 2px 4px #00000055", letterSpacing: 0.3,
+  };
+}
+
+function btn(color, large) {
+  return {
+    background: color, border: "1px solid rgba(255,255,255,0.15)",
+    borderRadius: 8, color: "white",
+    padding: large ? "12px 24px" : "8px 14px",
+    fontSize: large ? 15 : 13, cursor: "pointer", fontWeight: 700,
+    fontFamily: "Georgia, serif", whiteSpace: "nowrap",
+    boxShadow: "0 2px 6px #00000055", letterSpacing: 0.5,
+    textShadow: "0 1px 2px #00000088",
+  };
+}
+
+function GameScreen({ game, setGame, myPlayerIdx: myIdx, multiplayerActions, isMultiplayer }) {
+  const G = game;
+  const cp = G.currentPlayer;
+  const player = G.players[cp];
+  const isRoundEnd = G.phase === "roundEnd";
+  const hasSelection = G.selectedCards.length > 0;
+  // In multiplayer, only the current player can act
+  const myPlayerIdx = isMultiplayer ? (myIdx ?? G.myPlayerIdx ?? 0) : cp;
+  const isMyTurn = !isMultiplayer || myPlayerIdx === cp;
+
+
+  const [highlightedCardIds, setHighlightedCardIds] = useState(new Set());
+  const lastMeldRef = useRef(null);
+
+  // Highlight newly played cards and scroll to them
+  useEffect(() => {
+    if (G.lastAction) {
+      setHighlightedCardIds(G.lastAction.cardIds || new Set());
+      const timer = setTimeout(() => setHighlightedCardIds(new Set()), 1800);
+      setTimeout(() => {
+        if (lastMeldRef.current) {
+          lastMeldRef.current.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [G.lastAction]);
+
+  useEffect(() => {
+    const id = "pontinho-styles";
+    if (!document.getElementById(id)) {
+      const el = document.createElement("style");
+      el.id = id;
+      el.textContent = [
+        "@keyframes dealIn {",
+        "  0%   { opacity: 0; transform: translateY(-18px) scale(0.85) rotate(-4deg); }",
+        "  60%  { opacity: 1; transform: translateY(3px) scale(1.03) rotate(0.5deg); }",
+        "  100% { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); }",
+        "}",
+        ".meld-enter { animation: dealIn 0.35s cubic-bezier(0.22,1,0.36,1) both; }"
+      ].join("\n");
+      document.head.appendChild(el);
+    }
+  }, []);
+
+  const toggleCard = cardId => {
+    if (G.turnPhase === "draw") return;
+    setGame(g => ({
+      ...g,
+      selectedCards: g.selectedCards.includes(cardId)
+        ? g.selectedCards.filter(id => id !== cardId)
+        : [...g.selectedCards, cardId],
+    }));
+  };
+
+  const drawFromStock = () => {
+    if (G.turnPhase !== "draw" || G.stock.length === 0) return;
+    setGame(g => {
+      const [drawn, ...rest] = g.stock;
+      return {
+        ...g, stock: rest,
+        players: g.players.map((p, i) => i === g.currentPlayer ? { ...p, hand: [...p.hand, drawn] } : p),
+        turnPhase: "play", selectedCards: [], meldsThisTurn: 0,
+        message: player.name + ", baixe jogos ou descarte uma carta.",
+      };
+    });
+  };
+
+  const drawFromDiscard = () => {
+    if (G.turnPhase !== "draw" || G.discard.length === 0) return;
+    const topCard = G.discard[G.discard.length - 1];
+    setGame(g => ({
+      ...g,
+      discard: g.discard.slice(0, -1),
+      players: g.players.map((p, i) => i === g.currentPlayer ? { ...p, hand: [...p.hand, topCard] } : p),
+      turnPhase: "play", drewFromDiscard: true, drewFromDiscardCardId: topCard.id,
+      selectedCards: [], meldsThisTurn: 0,
+      message: player.name + ", você pegou " + topCard.rank + topCard.suit + ". Baixe um jogo usando essa carta! (ou devolva se não tiver jogo)",
+    }));
+  };
+
+  const returnDiscardCard = () => {
+    if (!G.drewFromDiscard || !G.drewFromDiscardCardId) return;
+    const cardId = G.drewFromDiscardCardId;
+    const card = player.hand.find(c => c.id === cardId);
+    if (!card) return;
+    setGame(g => ({
+      ...g,
+      players: g.players.map((p, i) => i === g.currentPlayer ? { ...p, hand: p.hand.filter(c => c.id !== cardId) } : p),
+      discard: [...g.discard, card],
+      turnPhase: "draw", drewFromDiscard: false, drewFromDiscardCardId: null, selectedCards: [],
+      message: player.name + ", carta devolvida. Compre do maço.",
+    }));
+  };
+
+  const moveCardInHand = (fromIdx, toIdx) => {
+    setGame(g => {
+      const hand = [...g.players[g.currentPlayer].hand];
+      const [moved] = hand.splice(fromIdx, 1);
+      hand.splice(toIdx, 0, moved);
+      return { ...g, players: g.players.map((p, i) => i === g.currentPlayer ? { ...p, hand } : p) };
+    });
+  };
+
+  const meldSelected = () => {
+    if (G.turnPhase !== "play") return;
+    const selCards = player.hand.filter(c => G.selectedCards.includes(c.id));
+    if (selCards.length < 3) { alert("Selecione pelo menos 3 cartas!"); return; }
+    const remainingAfter = player.hand.filter(c => !G.selectedCards.includes(c.id));
+    // isBater: mão vazia, sobra 1 carta, já baixou jogo nesse turno,
+    // OU o sistema detecta que o jogador pode bater com a mão atual
+    const isBater = remainingAfter.length === 0 ||
+      remainingAfter.length === 1 ||
+      G.meldsThisTurn >= 1 ||
+      canPlayerWinThisTurn(player.hand, G.players.flatMap(p => p.melds));
+    const type = isValidMeld(selCards, isBater);
+    if (!type) {
+      const wildCount = selCards.filter(c => c.isWild).length;
+      console.log("DEBUG meldSelected:", selCards.map(c=>c.rank+c.suit+(c.isWild?"[W]":"")), "isBater:", isBater);
+      if (wildCount > 1) alert("Jogo inválido! Só pode haver 1 coringa por jogo.");
+      else if (wildCount === 1 && !isBater) alert("Jogo inválido! Coringa só pode ficar no meio de sequências (não nas pontas e não em trincas), exceto numa rodada em que você vai bater.");
+      else alert("Jogo inválido! Verifique se as cartas formam uma sequência do mesmo naipe ou uma trinca de mesmo valor.");
+      return;
+    }
+    setGame(g => {
+      const players = g.players.map((p, i) => {
+        if (i !== g.currentPlayer) return p;
+        return {
+          ...p,
+          hand: p.hand.filter(c => !g.selectedCards.includes(c.id)),
+          melds: [...p.melds, { cards: sortMeldCards(normalizeWildsInMeld(selCards), type), type, owner: i, order: Date.now() + Math.random() }],
+        };
+      });
+      const won = players[g.currentPlayer].hand.length === 0;
+      const wins = won ? g.wins.map((w, i) => i === g.currentPlayer ? w + 1 : w) : g.wins;
+      return {
+        ...g, players, selectedCards: [], drewFromDiscard: false,
+        meldsThisTurn: g.meldsThisTurn + 1,
+        wins,
+        lastAction: won ? null : {
+          type: 'newMeld',
+          player: player.name,
+          cardIds: new Set(selCards.map(c => c.id)),
+          meldOrder: players[g.currentPlayer].melds[players[g.currentPlayer].melds.length - 1].order,
+          ts: Date.now(),
+        },
+        phase: won ? "roundEnd" : g.phase,
+        message: won ? player.name + " BATEU! 🎉" : player.name + ", continue baixando ou descarte.",
+      };
+    });
+  };
+
+  const addToMeld = (playerIdx, meldIdx) => {
+    if (G.turnPhase !== "play") return;
+    const selCards = player.hand.filter(c => G.selectedCards.includes(c.id));
+    if (selCards.length === 0) { alert("Selecione carta(s) da sua mão primeiro, depois clique no jogo da mesa."); return; }
+
+    setGame(g => {
+      const targetMeld = g.players[playerIdx].melds[meldIdx];
+      let wildDisplaced = null;
+      let cardsForMeld = [...targetMeld.cards, ...selCards];
+
+      if (targetMeld.type === "run") {
+        const wildInMeld = targetMeld.cards.find(c => c.isWild && !c.actingAsNormal);
+        // Check if any non-wild selCard exactly matches the wild's slot → displace wild
+        if (wildInMeld) {
+          const nonWildSel = selCards.filter(c => !c.isWild);
+          const slots = resolveRunSlots(targetMeld.cards);
+          const wildSlot = slots.find(s => s.isWildSlot);
+          if (wildSlot) {
+            const replacer = nonWildSel.find(c => c.rank === wildSlot.displayRank && c.suit === wildSlot.displaySuit);
+            if (replacer) {
+              wildDisplaced = wildInMeld;
+              const meldWithoutWild = targetMeld.cards.filter(c => c.id !== wildInMeld.id);
+              cardsForMeld = [...meldWithoutWild, ...selCards];
+            }
+          }
+        }
+      }
+
+      const remainingAfter = g.players[g.currentPlayer].hand.filter(c => !g.selectedCards.includes(c.id));
+      // isBater: mão vazia, sobra 1 carta, já baixou jogo nesse turno,
+      // OU o sistema detecta que o jogador pode bater com a mão atual
+      const isBater = remainingAfter.length === 0 ||
+        remainingAfter.length === 1 ||
+        g.meldsThisTurn >= 1 ||
+        canPlayerWinThisTurn(g.players[g.currentPlayer].hand, g.players.flatMap(p => p.melds));
+      const type = isValidMeld(cardsForMeld, isBater);
+      if (!type) {
+        const wildCount = cardsForMeld.filter(c => c.isWild).length;
+        if (wildCount > 1) alert("Jogo inválido! Só pode haver 1 coringa por jogo.");
+        else if (wildCount === 1 && !isBater) alert("Jogo inválido! Coringa só pode ficar no meio de sequências (não nas pontas e não em trincas), exceto numa rodada em que você vai bater.");
+        else alert("Jogo inválido! Verifique se as cartas formam uma sequência do mesmo naipe ou uma trinca de mesmo valor.");
+        return g;
+      }
+
+      const combined = sortMeldCards(normalizeWildsInMeld(cardsForMeld), type);
+      const players = g.players.map((p, i) => {
+        let newHand = p.hand;
+        let newMelds = p.melds;
+        if (i === g.currentPlayer) {
+          newHand = newHand.filter(c => !g.selectedCards.includes(c.id));
+          if (wildDisplaced) newHand = [...newHand, wildDisplaced];
+        }
+        if (i === playerIdx) {
+          newMelds = newMelds.map((m, mi) => mi === meldIdx ? { ...m, cards: combined } : m);
+        }
+        return { ...p, hand: newHand, melds: newMelds };
+      });
+
+      const won = players[g.currentPlayer].hand.length === 0;
+      const wins = won ? g.wins.map((w, i) => i === g.currentPlayer ? w + 1 : w) : g.wins;
+      return {
+        ...g, players, selectedCards: [],
+        wins,
+        phase: won ? "roundEnd" : g.phase,
+        lastAction: won ? null : {
+          type: wildDisplaced ? 'wildDisplaced' : 'addToMeld',
+          player: player.name,
+          cardIds: new Set(selCards.map(c => c.id)),
+          meldOrder: g.players[playerIdx].melds[meldIdx].order,
+          ts: Date.now(),
+        },
+        message: wildDisplaced
+          ? "Coringa deslocado! " + player.name + " recebeu o coringa na mão."
+          : won ? player.name + " BATEU! 🎉" : player.name + ", continue ou descarte.",
+      };
+    });
+  };
+
+  const discardCard = () => {
+    if (G.turnPhase !== "play") return;
+    if (G.selectedCards.length !== 1) { alert("Selecione exatamente 1 carta para descartar."); return; }
+    const cardId = G.selectedCards[0];
+    const card = player.hand.find(c => c.id === cardId);
+    setGame(g => {
+      const players = g.players.map((p, i) =>
+        i === g.currentPlayer ? { ...p, hand: p.hand.filter(c => c.id !== cardId) } : p
+      );
+      const next = (g.currentPlayer + 1) % g.players.length;
+      const won = players[g.currentPlayer].hand.length === 0;
+      const wins = won ? g.wins.map((w, i) => i === g.currentPlayer ? w + 1 : w) : g.wins;
+      return {
+        ...g, players,
+        discard: [...g.discard, card],
+        currentPlayer: won ? g.currentPlayer : next,
+        turnPhase: "draw", selectedCards: [], drewFromDiscard: false, drewFromDiscardCardId: null, meldsThisTurn: 0, lastAction: null,
+        wins,
+        phase: won ? "roundEnd" : g.phase,
+        message: won ? player.name + " BATEU! 🎉" : g.players[next].name + ", é sua vez! Compre uma carta.",
+      };
+    });
+  };
+
+  const nextRound = () => {
+    setGame(g => {
+      const newScores = g.players.map((p, i) => g.scores[i] + p.hand.reduce((s, c) => s + cardPoints(c), 0));
+      const nextDealer = (g.dealerPlayer + 1) % g.players.length;
+      const newGame = initGame(g.players.map(p => p.name), nextDealer);
+      return { ...newGame, scores: newScores, wins: g.wins, round: g.round + 1 };
+    });
+  };
+
+  const allMelds = G.players
+    .flatMap((p, pi) => p.melds.map((m, mi) => ({ ...m, playerIdx: pi, meldIdx: mi, ownerName: p.name })))
+    .sort((a, b) => (a.order || 0) - (b.order || 0));
+  const topDiscard = G.discard.length > 0 ? G.discard[G.discard.length - 1] : null;
+
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: "radial-gradient(ellipse at 50% 30%, #1e5c35 0%, #14401f 40%, #0a2712 100%)",
+      fontFamily: "Georgia, serif", color: "#f0e6c8", padding: "12px", boxSizing: "border-box",
+      backgroundImage: "radial-gradient(ellipse at 50% 30%, #1e5c35 0%, #14401f 40%, #0a2712 100%), repeating-linear-gradient(0deg,transparent,transparent 40px,rgba(255,255,255,0.015) 40px,rgba(255,255,255,0.015) 41px), repeating-linear-gradient(90deg,transparent,transparent 40px,rgba(255,255,255,0.015) 40px,rgba(255,255,255,0.015) 41px)",
+    }}>
+        {/* Header — Mesa circular */}
+      {(() => {
+        const n = G.players.length;
+        const RX = 110, RY = 72; // raios elipse horizontal/vertical
+        const CX = 160, CY = 88; // centro da elipse
+        const containerH = CY * 2 + 10;
+        return (
+          <div style={{ position: "relative", height: containerH, marginBottom: 8 }}>
+            {/* Logo central */}
+            <div style={{ position: "absolute", left: CX, top: CY, transform: "translate(-50%,-50%)", textAlign: "center", zIndex: 1 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: 2, color: "#c9a84c", textShadow: "0 0 14px #c9a84c88", lineHeight: 1 }}>🃏</div>
+              <div style={{ fontSize: 11, color: "#c9a84c", fontWeight: 700, letterSpacing: 1 }}>PONTINHO</div>
+              <div style={{ fontSize: 10, color: "#7ab87a" }}>Rod. {G.round}</div>
+            </div>
+            {/* Elipse pontilhada da mesa */}
+            <svg style={{ position: "absolute", top: 0, left: 0, width: "100%", height: containerH, pointerEvents: "none" }}>
+              <ellipse cx={CX} cy={CY} rx={RX - 14} ry={RY - 10}
+                fill="none" stroke="#2a5a30" strokeWidth="1" strokeDasharray="4 4" />
+            </svg>
+            {/* Jogadores ao redor da elipse */}
+            {G.players.map((p, i) => {
+              const angle = (2 * Math.PI * i / n) - Math.PI / 2;
+              const x = CX + RX * Math.cos(angle);
+              const y = CY + RY * Math.sin(angle);
+              const isActive = i === cp;
+              return (
+                <div key={i} style={{
+                  position: "absolute",
+                  left: x, top: y,
+                  transform: "translate(-50%,-50%)",
+                  textAlign: "center",
+                  background: isActive ? "linear-gradient(135deg,#8b6914,#c9a84c)" : "rgba(0,0,0,0.55)",
+                  border: isActive ? "2px solid #f0d060" : "1px solid #3a6640",
+                  borderRadius: 12,
+                  padding: "3px 8px",
+                  minWidth: 52,
+                  boxShadow: isActive ? "0 0 14px #c9a84c99" : "0 1px 4px #00000066",
+                  zIndex: isActive ? 2 : 1,
+                  transition: "all 0.3s",
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: isActive ? "#fff" : "#c8b87a", whiteSpace: "nowrap" }}>{p.name}</div>
+                  <div style={{ fontSize: 10, color: isActive ? "#ffe8a0" : "#7a9e7a" }}>{p.hand.length} cartas</div>
+                  <div style={{ fontSize: 10, color: isActive ? "#ffd080" : "#c9a84c", fontWeight: 700 }}>{G.scores[i]} pts</div>
+                  <div style={{ fontSize: 10, color: isActive ? "#a0f0a0" : "#5a9a5a" }}>🏆 {G.wins[i]}x</div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {/* Message */}
+      <div style={{
+        background: isRoundEnd ? "rgba(20,80,40,0.9)" : "rgba(0,0,0,0.5)",
+        border: "1px solid " + (isRoundEnd ? "#4caf72" : "#c9a84c"),
+        borderRadius: 8, padding: "8px 14px", marginBottom: 10, fontSize: 13,
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        boxShadow: "0 2px 8px #00000066",
+      }}>
+        <span>{G.message}</span>
+
+      </div>
+
+      {/* Table */}
+      <div style={{
+        background: "radial-gradient(ellipse at center,#1a5c2e,#0f3d1c)",
+        border: "3px solid #4a7a50",
+        borderRadius: 16, padding: "12px", marginBottom: 10, minHeight: 90,
+        boxShadow: "inset 0 2px 16px #00000055, 0 2px 8px #00000044",
+      }}>
+        <div style={{ fontSize: 11, color: "#888", marginBottom: 8 }}>
+          {"MESA"}
+          {G.turnPhase === "play" && hasSelection && (
+            <span style={{ color: "#f0d060", marginLeft: 8 }}>
+              👆 Clique em um jogo para adicionar as cartas selecionadas
+            </span>
+          )}
+        </div>
+        <div style={{ overflowX: "auto", paddingBottom: 4 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "flex-start", minWidth: "max-content" }}>
+            {allMelds.length === 0 && <span style={{ color: "#3a6640", fontSize: 13, fontStyle: "italic" }}>Nenhum jogo na mesa ainda</span>}
+            {allMelds.map((m, idx) => {
+              const isLast = G.lastAction && m.order === G.lastAction.meldOrder;
+              return (
+                <MeldDisplay
+                  key={idx} meld={m} ownerName={m.ownerName}
+                  highlight={G.turnPhase === "play" && hasSelection}
+                  highlightCardIds={highlightedCardIds}
+                  isLastMeld={!!isLast}
+                  lastMeldRef={lastMeldRef}
+                  onClick={() => { if (G.turnPhase === "play" && hasSelection) addToMeld(m.playerIdx, m.meldIdx); }}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Stock + Discard + Actions */}
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 10, color: "#7ab87a", marginBottom: 4, fontWeight: 700, letterSpacing: 1 }}>MAÇO ({G.stock.length})</div>
+          <div onClick={drawFromStock} style={{ cursor: G.turnPhase === "draw" ? "pointer" : "default" }}>
+            <CardView card={{ rank: "?", suit: "?" }} size="normal" faceDown />
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: "#7ab87a", marginBottom: 4, fontWeight: 700, letterSpacing: 1 }}>DESCARTE</div>
+          {topDiscard
+            ? <div onClick={drawFromDiscard} style={{ cursor: G.turnPhase === "draw" ? "pointer" : "default" }}><CardView card={topDiscard} size="normal" /></div>
+            : <div style={{ width: 62, height: 88, borderRadius: 7, border: "1.5px dashed #3a6640", display: "flex", alignItems: "center", justifyContent: "center", color: "#3a6640", fontSize: 12 }}>vazio</div>
+          }
+        </div>
+        {G.cutCard && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: 4 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+              <div style={{ fontSize: 10, color: "#7ab87a", fontWeight: 700, letterSpacing: 1 }}>VIRADA</div>
+              <CardView card={G.cutCard} size="normal" />
+              <div style={{ fontSize: 9, color: "#f0d060", fontWeight: 700, textAlign: "center", lineHeight: 1.3 }}>
+                {"★ " + RANKS[(RANKS.indexOf(G.cutCard.rank) + 1) % RANKS.length] + G.cutCard.suit}
+              </div>
+            </div>
+            {G.turnPhase === "play" && !isRoundEnd && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                {hasSelection && (
+                  <>
+                    <button onClick={meldSelected} style={btnSm("#1a6e35")}>⬇ Baixar</button>
+                    <button onClick={discardCard} style={btnSm("#8b1a1a")}>✕ Descartar</button>
+                  </>
+                )}
+                {G.drewFromDiscard && (
+                  <button onClick={returnDiscardCard} style={btnSm("#4a2070")}>↩ Devolver</button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        <div style={{ flex: 1 }} />
+        {isRoundEnd && <button onClick={nextRound} style={btn("linear-gradient(135deg,#8b6914,#c9a84c)", true)}>Próxima Rodada →</button>}
+      </div>
+
+      {/* Hand */}
+      {!isRoundEnd && (
+        <div style={{
+          background: "rgba(0,0,0,0.4)",
+          border: "2px solid #c9a84c",
+          borderRadius: 12, padding: "10px 12px 14px 12px",
+          boxShadow: "0 -2px 12px #00000055, inset 0 1px 0 #c9a84c33",
+          overflow: "visible",
+        }}>
+          <div style={{ fontSize: 12, color: "#c9a84c", marginBottom: 8, fontWeight: 700, letterSpacing: 1, display: "flex", alignItems: "center", gap: 10 }}>
+            {"✋ " + player.name + " — sua mão"}
+            <span style={{ fontSize: 10, color: "#7ab87a", fontWeight: 400 }}>arraste para reorganizar</span>
+          </div>
+          <div style={{ overflowX: "auto", overflowY: "visible", paddingTop: 18, paddingBottom: 8 }}>
+            {player.hand.length === 0
+              ? <span style={{ color: "#f0d060", fontWeight: 700, fontSize: 14 }}>Mão vazia — você bateu! 🎉</span>
+              : (
+                <div style={{
+                  position: "relative",
+                  height: CARD_H.large + 10,
+                  width: player.hand.length <= 1
+                    ? CARD_W.large
+                    : OVERLAP_HAND * (player.hand.length - 1) + CARD_W.large,
+                  minWidth: "max-content",
+                }}>
+                  {player.hand.map((card, idx) => {
+                    const isSelected = G.selectedCards.includes(card.id);
+                    const isLast = idx === player.hand.length - 1;
+                    return (
+                      <div
+                        key={card.id}
+                        draggable
+                        onDragStart={e => e.dataTransfer.setData("cardIdx", idx)}
+                        onDragOver={e => e.preventDefault()}
+                        onDrop={e => { e.preventDefault(); const from = parseInt(e.dataTransfer.getData("cardIdx")); if (from !== idx) moveCardInHand(from, idx); }}
+                        style={{
+                          position: "absolute",
+                          left: idx * OVERLAP_HAND,
+                          top: isSelected ? -14 : 0,
+                          zIndex: isSelected ? 50 + idx : idx,
+                          cursor: "grab",
+                          transition: "top 0.12s",
+                          filter: isSelected ? "drop-shadow(0 0 6px #f39c12)" : "none",
+                        }}
+                      >
+                        <CardView
+                          size="large"
+                          card={card}
+                          selected={isSelected}
+                          onClick={() => toggleCard(card.id)}
+                          wildCard={card.isWild && !card.isJoker && G.cutCard ? {
+                            rank: RANKS[(RANKS.indexOf(G.cutCard.rank) + 1) % RANKS.length],
+                            suit: G.cutCard.suit,
+                          } : null}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            }
+          </div>
+        </div>
+      )}
+
+      {/* Round End */}
+      {isRoundEnd && (
+        <div style={{
+          background: "linear-gradient(160deg,#0d3320,#0a2515)",
+          border: "2px solid #c9a84c",
+          borderRadius: 12, padding: "14px 18px",
+          boxShadow: "0 0 30px #00000066",
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#c9a84c", marginBottom: 10, letterSpacing: 1 }}>Fim da Rodada {G.round}</div>
+          {G.players.map((p, i) => {
+            const pts = p.hand.reduce((s, c) => s + cardPoints(c), 0);
+            return (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 14 }}>
+                <span>{p.name}</span>
+                <span style={{ color: pts > 0 ? "#e74c3c" : "#2ecc71" }}>+{pts}pts (total: {G.scores[i] + pts})</span>
+              </div>
+            );
+          })}
+          {G.players.map((p, i) => p.hand.length > 0 ? (
+            <div key={i} style={{ marginTop: 6 }}>
+              <div style={{ fontSize: 11, color: "#888" }}>{p.name} sobrou:</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                {p.hand.map(c => <CardView key={c.id} card={c} size="normal" />)}
+              </div>
+            </div>
+          ) : null)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Chat ─────────────────────────────────────────────────────────────────────
+function ChatPanel({ players, chatMessages, onSend }) {
+  const [text, setText] = useState("");
+  const [sender, setSender] = useState(players[0]?.name || "");
+  const bottomRef = { current: null };
+
+  const send = () => {
+    const t = text.trim();
+    if (!t) return;
+    onSend({ sender, text: t, time: Date.now() });
+    setText("");
+  };
+
+  const COLORS = ["#f0d060","#7ab87a","#e07070","#70b0e0","#c07ad0","#e09050"];
+  const colorFor = name => COLORS[players.findIndex(p => p.name === name) % COLORS.length] || "#ccc";
+
+  return (
+    <div style={{
+      background: "rgba(0,0,0,0.45)", border: "1px solid #3a6640",
+      borderRadius: 12, display: "flex", flexDirection: "column",
+      height: 220, marginTop: 10, overflow: "hidden",
+    }}>
+      <div style={{ fontSize: 10, color: "#7ab87a", fontWeight: 700, letterSpacing: 2, padding: "6px 10px 4px", borderBottom: "1px solid #1a4a2a" }}>
+        💬 CHAT
+      </div>
+      <div style={{ flex: 1, overflowY: "auto", padding: "6px 10px", display: "flex", flexDirection: "column", gap: 4 }}>
+        {chatMessages.length === 0 && (
+          <span style={{ color: "#3a6640", fontSize: 12, fontStyle: "italic" }}>Nenhuma mensagem ainda...</span>
+        )}
+        {chatMessages.map((msg, i) => (
+          <div key={i} style={{ fontSize: 12, lineHeight: 1.4 }}>
+            <span style={{ fontWeight: 700, color: colorFor(msg.sender) }}>{msg.sender}: </span>
+            <span style={{ color: "#e8dfc0" }}>{msg.text}</span>
+          </div>
+        ))}
+        <div ref={el => { if (el) el.scrollIntoView({ behavior: "smooth" }); }} />
+      </div>
+      <div style={{ display: "flex", gap: 6, padding: "6px 8px", borderTop: "1px solid #1a4a2a" }}>
+        <select
+          value={sender}
+          onChange={e => setSender(e.target.value)}
+          style={{
+            background: "#0a2010", color: "#c9a84c", border: "1px solid #3a6640",
+            borderRadius: 6, padding: "4px 6px", fontSize: 11, fontFamily: "Georgia, serif",
+            cursor: "pointer", flexShrink: 0,
+          }}
+        >
+          {players.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+        </select>
+        <input
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") send(); }}
+          placeholder="Mensagem..."
+          style={{
+            flex: 1, background: "#0a2010", color: "#e8dfc0",
+            border: "1px solid #3a6640", borderRadius: 6,
+            padding: "4px 8px", fontSize: 12, fontFamily: "Georgia, serif", outline: "none",
+          }}
+        />
+        <button
+          onClick={send}
+          style={{
+            background: "#1a6e35", border: "none", borderRadius: 6,
+            color: "white", padding: "4px 10px", fontSize: 12,
+            cursor: "pointer", fontWeight: 700, flexShrink: 0,
+          }}
+        >➤</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Discard Claim Banner ─────────────────────────────────────────────────────
+function DiscardClaimBanner({ claim, myPlayerIdx, onClaim, players }) {
+  const [timeLeft, setTimeLeft] = useState(0);
+
+  useEffect(() => {
+    if (!claim) return;
+    const update = () => {
+      const left = Math.max(0, Math.ceil((claim.deadline - Date.now()) / 1000));
+      setTimeLeft(left);
+      if (left > 0) setTimeout(update, 200);
+    };
+    update();
+  }, [claim]);
+
+  if (!claim) return null;
+  const alreadyClaimed = claim.claims?.some(c => c.playerIdx === myPlayerIdx);
+  const isDiscarding = claim.discardingPlayerIdx === myPlayerIdx;
+
+  return (
+    <div style={{
+      position:"fixed", top:0, left:0, right:0, zIndex:9999,
+      background:"linear-gradient(135deg,#8b1a1a,#c0392b)",
+      border:"2px solid #f0d060", padding:"12px 16px",
+      display:"flex", alignItems:"center", justifyContent:"space-between",
+      boxShadow:"0 4px 20px #00000099",
+    }}>
+      <div>
+        <div style={{ color:"#f0d060", fontWeight:700, fontSize:14 }}>
+          Carta descartada disponível!
+        </div>
+        <div style={{ color:"#ffcccc", fontSize:12 }}>
+          {claim.claims?.length > 0 ? claim.claims.map(c => players[c.playerIdx]?.name).join(", ") + " quer pegar" : "Ninguém reivindicou ainda"}
+        </div>
+      </div>
+      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+        <div style={{ fontSize:22, fontWeight:900, color: timeLeft <= 3 ? "#ff4444" : "#f0d060", minWidth:24, textAlign:"center" }}>
+          {timeLeft}
+        </div>
+        {!isDiscarding && !alreadyClaimed && (
+          <button onClick={onClaim} style={{
+            background:"#f0d060", border:"none", borderRadius:8,
+            color:"#1a1a1a", fontWeight:900, fontSize:14,
+            padding:"8px 16px", cursor:"pointer",
+          }}>PEGAR!</button>
+        )}
+        {alreadyClaimed && <div style={{ color:"#90ee90", fontSize:12, fontWeight:700 }}>✓ Você quer pegar</div>}
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [inGame, setInGame] = useState(false);
+  const [game, setGame] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [discardClaim, setDiscardClaim] = useState(null);
+  const [myPlayerIdx, setMyPlayerIdx] = useState(0);
+
+  useEffect(() => {
+    const s = getSocket();
+    if (!s) return;
+
+    s.on("gameState", (state) => {
+      setGame(state);
+      setMyPlayerIdx(state.myPlayerIdx);
+    });
+    s.on("chatMessages", msgs => setChatMessages(msgs));
+    s.on("discardClaimOpen", (claim) => setDiscardClaim(claim));
+    s.on("discardClaimResolved", ({ winner, winnerName, card, message }) => {
+      setDiscardClaim(null);
+    });
+    s.on("discardClaimUpdate", ({ claims }) => {
+      setDiscardClaim(prev => prev ? { ...prev, claims } : prev);
+    });
+
+    return () => {
+      s.off("gameState"); s.off("chatMessages");
+      s.off("discardClaimOpen"); s.off("discardClaimResolved");
+      s.off("discardClaimUpdate");
+    };
+  }, []);
+
+  const sendMessage = ({ sender, text }) => {
+    getSocket()?.emit("chatMessage", { sender, text });
+  };
+
+  if (!inGame) return <SetupScreen onEnterGame={() => setInGame(true)} />;
+  if (!game) return (
+    <div style={{ minHeight:"100vh", background:"#0a2712", display:"flex", alignItems:"center", justifyContent:"center", color:"#c9a84c", fontSize:18 }}>
+      Carregando jogo...
+    </div>
+  );
+
+  // Multiplayer-aware game actions via socket
+  const multiplayerActions = {
+    drawFromStock: () => getSocket()?.emit("drawFromStock"),
+    discardCard: (cardId) => getSocket()?.emit("discardCard", { cardId }),
+    playMeld: (cardIds) => getSocket()?.emit("playMeld", { cardIds }),
+    addToMeld: (cardIds, targetPlayerIdx, targetMeldIdx) =>
+      getSocket()?.emit("addToMeld", { cardIds, targetPlayerIdx, targetMeldIdx }),
+    nextRound: () => getSocket()?.emit("nextRound"),
+    claimDiscard: () => getSocket()?.emit("claimDiscard"),
+  };
+
+  return (
+    <div>
+      <DiscardClaimBanner
+        claim={discardClaim}
+        myPlayerIdx={myPlayerIdx}
+        players={game.players}
+        onClaim={multiplayerActions.claimDiscard}
+      />
+      <GameScreen
+        game={game}
+        setGame={setGame}
+        myPlayerIdx={myPlayerIdx}
+        multiplayerActions={multiplayerActions}
+        isMultiplayer={true}
+      />
+      <div style={{ padding: "0 12px 12px" }}>
+        <ChatPanel players={game.players} chatMessages={chatMessages} onSend={sendMessage} />
+      </div>
+    </div>
+  );
+}
+
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
