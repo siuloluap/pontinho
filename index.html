@@ -96,6 +96,7 @@ function getSock(){
         g.players[st.playerIdx].hand=ord;
       }
       st.game=g;
+      st.playerIdx=g.myPlayerIdx;
       if(g.players[st.playerIdx])
         st.localHandOrder=g.players[st.playerIdx].hand.map(function(c){return c.id;});
       if(g.lastAction){
@@ -239,8 +240,7 @@ function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").repl
 
 
 
-
-    function render(){
+function render(){
   var app=document.getElementById("app");
   if(st.screen==="home")app.innerHTML=rHome();
   else if(st.screen==="join")app.innerHTML=rJoin();
@@ -327,7 +327,7 @@ function rGame(){
       '</div>'+
       chips+
     '</div>'+
-    '<div class="mbar'+(re?" win":"")+'">'+esc(g.message||"")+'</div>'+
+    '<div class="mbar'+(re?" win":"")+'">'+esc(g.message||"")+'<small style="opacity:0.5;margin-left:6px">[eu:'+my+' vez:'+cp+' fase:'+g.turnPhase+']</small></div>'+
     notme+
     '<div class="ptbl"><div class="tlbl">MESA'+(hs&&isMe?" &#x1F446; Clique num jogo para adicionar":"")+' </div><div class="mrow">'+mh+'</div></div>'+
     '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">'+
@@ -416,3 +416,4 @@ render();
 </script>
 </body>
 </html>
+    
