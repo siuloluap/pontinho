@@ -76,11 +76,29 @@ var PL={"A":[[50,50]],"2":[[50,22],[50,78]],"3":[[50,20],[50,50],[50,80]],"4":[[
 var FI={"J":"♟","Q":"♛","K":"♚"};
 var SZ={tiny:{w:28,h:40,c:8,p:7,f:13,r:4},small:{w:42,h:60,c:11,p:11,f:20,r:6},normal:{w:56,h:80,c:13,p:14,f:28,r:7},large:{w:68,h:96,c:16,p:17,f:34,r:9}};
 var sock=null;
-var st={screen:"home",myName:"",joinCode:"",roomCode:"",players:[],isCreator:false,playerIdx:0,error:"",game:null,sel:[],chat:[],claim:null,hlIds:new Set(),lastMeldOrder:null};
+var st={screen:"home",myName:"",joinCode:"",roomCode:"",players:[],isCreator:false,playerIdx:0,error:"",game:null,sel:[],chat:[],claim:null,hlIds:new Set(),lastMeldOrder:null,localHandOrder:[]};
 function getSock(){
   if(!sock){
     sock=io(SRV,{transports:["websocket"]});
-    sock.on("gameState",function(g){st.game=g;if(st.screen!=="game")st.screen="game";render();});
+    sock.on("gameState",function(g){
+      if(st.localHandOrder.length>0&&g.players[st.playerIdx]){
+        var serverHand=g.players[st.playerIdx].hand;
+        var ordered=[];
+        st.localHandOrder.forEach(function(id){
+          var c=serverHand.find(function(x){return x.id===id;});
+          if(c)ordered.push(c);
+        });
+        serverHand.forEach(function(c){
+          if(!st.localHandOrder.includes(c.id))ordered.push(c);
+        });
+        g.players[st.playerIdx].hand=ordered;
+      }
+      st.game=g;
+      if(g.players[st.playerIdx])
+        st.localHandOrder=g.players[st.playerIdx].hand.map(function(c){return c.id;});
+      if(st.screen!=="game")st.screen="game";
+      render();
+    });
     sock.on("playerJoined",function(d){st.players=d.players;render();});
     sock.on("gameStarted",function(){st.screen="game";render();});
     sock.on("chatMessages",function(m){st.chat=m;rchat();});
@@ -187,6 +205,7 @@ function moveCard(f,dir){
   if(t<0||t>=h.length)return;
   var mv=h.splice(f,1)[0];
   h.splice(t,0,mv);
+  st.localHandOrder=h.map(function(c){return c.id;});
   render();
 }
 function dfs(){var g=st.game;if(!g||g.turnPhase!=="draw"||g.currentPlayer!==st.playerIdx)return;getSock().emit("drawFromStock");}
@@ -267,7 +286,7 @@ function rbanner(){
   var alr=c.claims&&c.claims.some(function(x){return x.playerIdx===st.playerIdx;});
   var clms=c.claims&&c.claims.length>0?c.claims.map(function(x){return x.name;}).join(", ")+" quer pegar":"Ningu&#233;m reivindicou ainda";
   var cardHtml=c.card?mkcard(c.card,"small",false):"";
-  return'<div class="cbanner"><div style="display:flex;align-items:center;gap:10px">'+cardHtml+'<div><div style="color:#f0d060;font-weight:700;font-size:14px">Carta dispon&#237;vel!</div><div style="color:#ffcccc;font-size:12px">'+clms+'</div></div></div><div style="display:flex;align-items:center;gap:8px"><div id="ctmr" class="ctmr '+(l<=3?"urg":"ok")+'">'+l+'</div>'+(!isd&&!alr?'<button class="bpegar" onclick="clmd()">PEGAR!</button>':alr?'<div style="color:#90ee90;font-size:12px;font-weight:700">&#x2713; Quer pegar</div>':""  )+'</div></div>';
+  return'<div class="cbanner"><div style="display:flex;align-items:center;gap:10px">'+cardHtml+'<div><div style="color:#f0d060;font-weight:700;font-size:14px">Carta dispon&#237;vel!</div><div style="color:#ffcccc;font-size:12px">'+clms+'</div></div></div><div style="display:flex;align-items:center;gap:8px"><div id="ctmr" class="ctmr '+(l<=3?"urg":"ok")+'">'+l+'</div>'+(!isd&&!alr?'<button class="bpegar" onclick="clmd()">PEGAR!</button>':alr?'<div style="color:#90ee90;font-size:12px;font-weight:700">&#x2713; Quer pegar</div>':"")+'</div></div>';
 }
 function rchat(){var el=document.getElementById("cm");if(!el)return;var h=st.chat.map(function(m,i){return'<div><span style="font-weight:700;color:'+CC[i%CC.length]+'">'+esc(m.sender)+':</span> <span style="color:#e8dfc0">'+esc(m.text)+'</span></div>';}).join("");el.innerHTML=h||'<span style="color:#3a6640;font-size:12px;font-style:italic">Sem mensagens...</span>';el.scrollTop=el.scrollHeight;}
 function sc(){var i=document.getElementById("ci");if(!i||!i.value.trim())return;getSock().emit("chatMessage",{sender:st.myName,text:i.value.trim()});i.value="";}
