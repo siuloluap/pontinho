@@ -70,7 +70,6 @@ button,input{font-family:Georgia,serif;cursor:pointer}
 
 
 
-
   <script>
 var SRV="https://pontinho-server-production.up.railway.app";
 var CC=["#f0d060","#7ab87a","#e07070","#70b0e0","#c07ad0","#e09050"];
@@ -78,7 +77,7 @@ var RANKS=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
 var SC={"♥":"#cc1111","♦":"#cc1111","♠":"#111","♣":"#111","★":"#e74c3c"};
 var PL={"A":[[50,50]],"2":[[50,22],[50,78]],"3":[[50,20],[50,50],[50,80]],"4":[[25,22],[75,22],[25,78],[75,78]],"5":[[25,20],[75,20],[50,50],[25,80],[75,80]],"6":[[25,20],[75,20],[25,50],[75,50],[25,80],[75,80]],"7":[[25,18],[75,18],[50,36],[25,55],[75,55],[25,76],[75,76]],"8":[[25,16],[75,16],[25,38],[75,38],[25,62],[75,62],[25,84],[75,84]],"9":[[25,15],[75,15],[25,35],[75,35],[50,50],[25,65],[75,65],[25,85],[75,85]],"10":[[25,13],[75,13],[50,28],[25,42],[75,42],[25,58],[75,58],[50,72],[25,87],[75,87]]};
 var FI={"J":"♟","Q":"♛","K":"♚"};
-var SZ={tiny:{w:28,h:40,c:8,p:7,f:13,r:4},small:{w:42,h:60,c:11,p:11,f:20,r:6},normal:{w:56,h:80,c:13,p:14,f:28,r:7},large:{w:68,h:96,c:16,p:17,f:34,r:9}};
+var SZ={tiny:{w:32,h:46,c:9,p:8,f:15,r:4},small:{w:48,h:68,c:12,p:12,f:22,r:6},normal:{w:64,h:90,c:15,p:16,f:32,r:7},large:{w:76,h:108,c:18,p:19,f:38,r:9}};
 var sock=null;
 var st={screen:"home",myName:"",joinCode:"",roomCode:"",players:[],isCreator:false,playerIdx:0,error:"",game:null,sel:[],chat:[],claim:null,hlIds:new Set(),lastMeldOrder:null,localHandOrder:[]};
 function getSock(){
@@ -174,19 +173,19 @@ function mkmeld(m,mi,pi,own,hl){
   var cards=m.cards||[];
   var ch="";
   if(m.type==="run"){
-    var OV=22,n=cards.length,tw=n<=1?68:OV*(n-1)+68;
+    var OV=24,n=cards.length,tw=n<=1?76:OV*(n-1)+76;
     var cd=cards.map(function(c,i){
       var glow=(st.hlIds&&st.hlIds.has&&st.hlIds.has(c.id))?"filter:drop-shadow(0 0 8px #f0d060)":"";
       return'<div style="position:absolute;left:'+i*OV+'px;z-index:'+i+';'+glow+'">'+mkcard(c,"large",false)+'</div>';
     }).join("");
-    ch='<div style="position:relative;width:'+tw+'px;height:96px;flex-shrink:0">'+cd+'</div>';
+    ch='<div style="position:relative;width:'+tw+'px;height:108px;flex-shrink:0">'+cd+'</div>';
   }else{
     var grp={},ord=[];
     cards.forEach(function(c){if(!grp[c.suit]){grp[c.suit]=[];ord.push(c.suit);}grp[c.suit].push(c);});
     var mx=1;ord.forEach(function(s){if(grp[s].length>mx)mx=grp[s].length;});
-    var PO=10,cH=96+(mx-1)*PO,tw2=0,ph="";
+    var PO=10,cH=108+(mx-1)*PO,tw2=0,ph="";
     ord.forEach(function(suit){
-      var pile=grp[suit],x=tw2;tw2+=74;
+      var pile=grp[suit],x=tw2;tw2+=82;
       if(pile.length===1){
         var glow=(st.hlIds&&st.hlIds.has&&st.hlIds.has(pile[0].id))?"filter:drop-shadow(0 0 8px #f0d060)":"";
         ph+='<div style="position:absolute;left:'+x+'px;top:'+(mx-1)*PO+'px;'+glow+'">'+mkcard(pile[0],"large",false)+'</div>';
@@ -231,8 +230,6 @@ function clmd(){getSock().emit("claimDiscard");}
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 
 
-
-
     function render(){
   var app=document.getElementById("app");
   if(st.screen==="home")app.innerHTML=rHome();
@@ -270,12 +267,12 @@ function rGame(){
   var td=g.discard&&g.discard.length>0?g.discard[g.discard.length-1]:null;
   var wl=g.cutCard?RANKS[(RANKS.indexOf(g.cutCard.rank)+1)%RANKS.length]+g.cutCard.suit:"";
   var hand=mp?mp.hand:[];
-  var OV=26,hw=hand.length<=1?68:OV*(hand.length-1)+68;
+  var OV=28,hw=hand.length<=1?76:OV*(hand.length-1)+76;
   var hc=hand.map(function(c,i){
     var s=st.sel.indexOf(c.id)>=0,t=s?0:10;
     var isClaimed=isMe&&g.claimedDiscardCardId&&c.id===g.claimedDiscardCardId;
     var claimedBadge=isClaimed?'<div style="position:absolute;top:-18px;left:0;right:0;text-align:center;font-size:9px;background:#f0d060;color:#111;border-radius:3px;padding:1px 2px;font-weight:700">USE ESTA</div>':"";
-    var arrowRow=s?'<div style="display:flex;justify-content:space-between;width:68px;margin-top:3px">'+
+    var arrowRow=s?'<div style="display:flex;justify-content:space-between;width:76px;margin-top:3px">'+
       (i>0?'<button onclick="event.stopPropagation();moveCard('+i+',-1)" style="background:#c9a84c;border:none;border-radius:3px;color:#111;font-size:11px;padding:1px 5px;font-weight:700;cursor:pointer">&#9664;</button>':'<span style="width:24px;display:inline-block"></span>')+
       (i<hand.length-1?'<button onclick="event.stopPropagation();moveCard('+i+',1)" style="background:#c9a84c;border:none;border-radius:3px;color:#111;font-size:11px;padding:1px 5px;font-weight:700;cursor:pointer">&#9654;</button>':'<span style="width:24px;display:inline-block"></span>')+
       '</div>':'';
@@ -321,7 +318,7 @@ function rGame(){
       '</div>'+
       '<div class="dslot"><div class="dlbl">DESCARTE</div>'+
         '<div onclick="'+(isMe&&g.turnPhase==="draw"&&td?"dfd()":"")+'">'+
-          (td?mkcard(td,"normal",false):'<div style="width:56px;height:80px;border-radius:7px;border:1.5px dashed #3a6640;display:flex;align-items:center;justify-content:center;color:#3a6640;font-size:11px">vazio</div>')+
+          (td?mkcard(td,"normal",false):'<div style="width:64px;height:90px;border-radius:7px;border:1.5px dashed #3a6640;display:flex;align-items:center;justify-content:center;color:#3a6640;font-size:11px">vazio</div>')+
         '</div>'+
       '</div>'+
       (g.cutCard?'<div class="dslot"><div class="dlbl">VIRADA</div>'+mkcard(g.cutCard,"normal",false)+'<div class="dwild">&#9733; '+wl+'</div></div>':"")+
@@ -335,7 +332,7 @@ function rGame(){
       '<div class="hscr">'+
         (hand.length===0
           ?'<span style="color:#f0d060;font-weight:700;font-size:14px">M&#227;o vazia &#8212; voc&#234; bateu!</span>'
-          :'<div style="position:relative;width:'+hw+'px;height:130px">'+hc+'</div>')+
+          :'<div style="position:relative;width:'+hw+'px;height:145px">'+hc+'</div>')+
       '</div>'+
     '</div>'+
     '<div class="chat">'+
