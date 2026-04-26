@@ -71,8 +71,6 @@ button,input{font-family:Georgia,serif;cursor:pointer}
 
 
 
-
-
   <script>
 var SRV="https://pontinho-server-production.up.railway.app";
 var CC=["#f0d060","#7ab87a","#e07070","#70b0e0","#c07ad0","#e09050"];
@@ -113,9 +111,13 @@ function getSock(){
     sock.on("gameStarted",function(){st.screen="game";render();});
     sock.on("chatMessages",function(m){st.chat=m;rchat();});
     sock.on("discardClaimOpen",function(c){st.claim=c;startTimer();render();});
-    sock.on("discardClaimResolved",function(){st.claim=null;render();});
+    sock.on("discardClaimResolved",function(d){
+      st.claim=null;
+      if(d&&d.message&&st.game)st.game.message=d.message;
+      render();
+    });
     sock.on("discardClaimUpdate",function(d){if(st.claim)st.claim.claims=d.claims;});
-    sock.on("error",function(m){st.error=m;render();});
+    sock.on("error",function(m){alert(m);});
   }
   return sock;
 }
@@ -271,11 +273,13 @@ function rGame(){
   var OV=26,hw=hand.length<=1?68:OV*(hand.length-1)+68;
   var hc=hand.map(function(c,i){
     var s=st.sel.indexOf(c.id)>=0,t=s?0:10;
+    var isClaimed=isMe&&g.claimedDiscardCardId&&c.id===g.claimedDiscardCardId;
+    var claimedBadge=isClaimed?'<div style="position:absolute;top:-18px;left:0;right:0;text-align:center;font-size:9px;background:#f0d060;color:#111;border-radius:3px;padding:1px 2px;font-weight:700">USE ESTA</div>':"";
     var arrowRow=s?'<div style="display:flex;justify-content:space-between;width:68px;margin-top:3px">'+
       (i>0?'<button onclick="event.stopPropagation();moveCard('+i+',-1)" style="background:#c9a84c;border:none;border-radius:3px;color:#111;font-size:11px;padding:1px 5px;font-weight:700;cursor:pointer">&#9664;</button>':'<span style="width:24px;display:inline-block"></span>')+
       (i<hand.length-1?'<button onclick="event.stopPropagation();moveCard('+i+',1)" style="background:#c9a84c;border:none;border-radius:3px;color:#111;font-size:11px;padding:1px 5px;font-weight:700;cursor:pointer">&#9654;</button>':'<span style="width:24px;display:inline-block"></span>')+
       '</div>':'';
-    return'<div style="position:absolute;left:'+i*OV+'px;top:'+t+'px;z-index:'+(s?50+i:i)+';transition:top 0.12s;filter:'+(s?"drop-shadow(0 0 6px #f39c12)":"none")+'">'+mkcardC(c,"large",s,c.id)+arrowRow+'</div>';
+    return'<div style="position:absolute;left:'+i*OV+'px;top:'+t+'px;z-index:'+(s?50+i:i)+';transition:top 0.12s;filter:'+(s?"drop-shadow(0 0 6px #f39c12)":isClaimed?"drop-shadow(0 0 8px #f0d060)":"none")+'">'+claimedBadge+mkcardC(c,"large",s,c.id)+arrowRow+'</div>';
   }).join("");
   var ah="";
   if(!re&&isMe&&g.turnPhase==="play"){
@@ -308,7 +312,7 @@ function rGame(){
       '</div>'+
       chips+
     '</div>'+
-    '<div class="mbar'+(re?" win":"")+'">'+esc(g.message||"")+'<span style="font-size:10px;opacity:0.5;margin-left:6px">[eu:'+my+' vez:'+cp+' fase:'+g.turnPhase+']</span></div>'+
+    '<div class="mbar'+(re?" win":"")+'">'+esc(g.message||"")+'</div>'+
     notme+
     '<div class="ptbl"><div class="tlbl">MESA'+(hs&&isMe?" &#x1F446; Clique num jogo para adicionar":"")+' </div><div class="mrow">'+mh+'</div></div>'+
     '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">'+
