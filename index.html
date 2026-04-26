@@ -25,7 +25,7 @@ button,input{font-family:Georgia,serif;cursor:pointer}
 .ptit{font-size:11px;color:#7ab87a;letter-spacing:2px;margin-bottom:10px;font-weight:700}
 .prow{color:#f0e6c8;font-size:14px;padding:5px 0;border-bottom:1px solid #1a4a2a}
 .game{min-height:100vh;padding:8px;display:flex;flex-direction:column;gap:8px}
-.chip{position:absolute;transform:translate(-50%,-50%);text-align:center;border-radius:10px;padding:3px 8px;min-width:60px;transition:all 0.3s}
+.chip{position:absolute;transform:translate(-50%,-50%);text-align:center;border-radius:10px;padding:4px 10px;min-width:70px;transition:all 0.3s}
 .chip-a{background:linear-gradient(135deg,#8b6914,#c9a84c);border:2px solid #f0d060;box-shadow:0 0 14px #c9a84c99}
 .chip-d{background:rgba(30,60,100,0.75);border:2px solid #6090d0}
 .chip-n{background:rgba(0,0,0,0.55);border:1px solid #3a6640}
@@ -71,7 +71,6 @@ button,input{font-family:Georgia,serif;cursor:pointer}
 </head>
 <body>
 <div id="app"></div>
-
 
 
 
@@ -276,7 +275,7 @@ function rGame(){
     var ia=i===cp,id2=i===g.dealerPlayer;
     var cls=ia?"chip chip-a":id2?"chip chip-d":"chip chip-n";
     var nc=ia?"#fff":id2?"#90c0f0":"#c8b87a",ic=ia?"#ffe8a0":"#7a9e7a";
-    return'<div class="'+cls+'" style="left:'+x+'px;top:'+y+'px"><div style="font-size:11px;font-weight:700;color:'+nc+';white-space:nowrap">'+(id2?"&#x1F0A0; ":"")+esc(p.name)+'</div><div style="font-size:9px;color:'+ic+'">'+p.hand.length+' cartas</div><div style="font-size:9px;color:'+(ia?"#ffd080":"#c9a84c")+';font-weight:700">'+g.scores[i]+' pts</div><div style="font-size:9px;color:'+(ia?"#a0f0a0":"#5a9a5a")+'">&#x1F3C6; '+g.wins[i]+'x</div></div>';
+    return'<div class="'+cls+'" style="left:'+x+'px;top:'+y+'px"><div style="font-size:13px;font-weight:700;color:'+nc+';white-space:nowrap">'+(id2?"&#x1F0A0; ":"")+esc(p.name)+'</div><div style="font-size:11px;color:'+ic+'">'+p.hand.length+' cartas</div><div style="font-size:11px;color:'+(ia?"#ffd080":"#c9a84c")+';font-weight:700">'+g.scores[i]+' pts</div><div style="font-size:11px;color:'+(ia?"#a0f0a0":"#5a9a5a")+'">&#x1F3C6; '+g.wins[i]+'x</div></div>';
   }).join("");
   var allM=[];
   g.players.forEach(function(p,pi){(p.melds||[]).forEach(function(m,mi){allM.push({m:m,mi:mi,pi:pi,own:p.name});});});
@@ -305,12 +304,14 @@ function rGame(){
   var reh="";
   if(re){
     var rows=g.players.map(function(p,i){
-      var pts=(p.hand||[]).filter(function(c){return !c.faceDown;}).reduce(function(s,c){
-        if(c.isWild)return s+20;
-        var rv={A:15,J:10,Q:10,K:10};
-        return s+(rv[c.rank]||parseInt(c.rank)||0);
-      },0);
-      var isWinner=p.hand.length===0;
+      var pts=g.roundPoints&&g.roundPoints[i]!==undefined?g.roundPoints[i]:
+        (p.hand||[]).filter(function(c){return !c.faceDown;}).reduce(function(s,c){
+          if(c.isWild)return s+20;
+          var rv={A:15,J:10,Q:10,K:10};
+          return s+(rv[c.rank]||parseInt(c.rank)||0);
+        },0);
+      var isWinner=pts===0&&g.wins[i]>=(g.wins[my]||-1);
+      if(g.roundPoints)isWinner=g.roundPoints[i]===0&&p.hand.length===0;
       return'<div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:14px;padding:4px 0;border-bottom:1px solid #1a4a2a">'+
         '<span style="color:'+(isWinner?"#f0d060":"#f0e6c8")+'">'+(isWinner?"&#x1F3C6; ":"")+esc(p.name)+'</span>'+
         '<span style="color:'+(pts>0?"#e74c3c":"#2ecc71")+'">'+(isWinner?"BATEU! 0pts":"+"+pts+"pts")+" (total: "+(g.scores[i]+pts)+"pts)"+'</span>'+
