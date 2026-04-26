@@ -240,7 +240,9 @@ function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").repl
 
 
 
-function render(){
+
+
+    function render(){
   var app=document.getElementById("app");
   if(st.screen==="home")app.innerHTML=rHome();
   else if(st.screen==="join")app.innerHTML=rJoin();
@@ -327,7 +329,7 @@ function rGame(){
       '</div>'+
       chips+
     '</div>'+
-    '<div class="mbar'+(re?" win":"")+'">'+esc(g.message||"")+'<small style="opacity:0.5;margin-left:6px">[eu:'+my+' vez:'+cp+' fase:'+g.turnPhase+']</small></div>'+
+    '<div class="mbar'+(re?" win":"")+'">'+esc(g.message||"")+'</div>'+
     notme+
     '<div class="ptbl"><div class="tlbl">MESA'+(hs&&isMe?" &#x1F446; Clique num jogo para adicionar":"")+' </div><div class="mrow">'+mh+'</div></div>'+
     '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">'+
@@ -416,4 +418,3 @@ render();
 </script>
 </body>
 </html>
-    
