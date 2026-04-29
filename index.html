@@ -29,24 +29,24 @@ button,input{font-family:Georgia,serif;cursor:pointer}
 .chip-a{background:linear-gradient(135deg,#8b6914,#c9a84c);border:2px solid #f0d060;box-shadow:0 0 14px #c9a84c99}
 .chip-d{background:rgba(30,60,100,0.75);border:2px solid #6090d0}
 .chip-n{background:rgba(0,0,0,0.55);border:1px solid #3a6640}
-.mbar{border-radius:8px;padding:8px 12px;font-size:13px;border:1px solid #c9a84c;background:rgba(0,0,0,0.5)}
+.mbar{border-radius:8px;padding:10px 14px;font-size:15px;border:1px solid #c9a84c;background:rgba(0,0,0,0.5)}
 .mbar.win{background:rgba(20,80,40,0.9);border-color:#4caf72}
 .ptbl{background:radial-gradient(ellipse at center,#1a5c2e,#0f3d1c);border:3px solid #4a7a50;border-radius:16px;padding:10px;min-height:80px}
-.tlbl{font-size:11px;color:#7ab87a;margin-bottom:8px;font-weight:700;letter-spacing:2px}
+.tlbl{font-size:13px;color:#7ab87a;margin-bottom:8px;font-weight:700;letter-spacing:2px}
 .mrow{display:flex;flex-wrap:wrap;gap:6px;overflow-x:auto;padding-bottom:4px}
 .mb{background:rgba(10,30,15,0.7);border:1px solid #3a6640;border-radius:8px;padding:6px 8px;display:inline-block;transition:border 0.3s,background 0.3s}
 .mb.hl{border:2px solid #f0d060;background:rgba(201,168,76,0.2);box-shadow:0 0 12px #f0d06055}
-.mown{font-size:9px;color:#7ab87a;margin-bottom:3px}
+.mown{font-size:11px;color:#7ab87a;margin-bottom:3px}
 .dslot{display:flex;flex-direction:column;align-items:center;gap:4px}
-.dlbl{font-size:10px;color:#7ab87a;font-weight:700;letter-spacing:1px}
-.dwild{font-size:9px;color:#f0d060;font-weight:700}
-.ba{padding:7px 12px;border-radius:7px;border:1px solid rgba(255,255,255,0.15);color:#fff;font-size:12px;font-weight:700;white-space:nowrap}
+.dlbl{font-size:12px;color:#7ab87a;font-weight:700;letter-spacing:1px}
+.dwild{font-size:11px;color:#f0d060;font-weight:700}
+.ba{padding:10px 16px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);color:#fff;font-size:14px;font-weight:700;white-space:nowrap}
 .ba-b{background:#1a6e35}
 .ba-d{background:#8b1a1a}
 .ba-r{background:#4a2070}
 .ba-n{background:linear-gradient(135deg,#8b6914,#c9a84c);font-size:14px;padding:10px 20px}
 .hbox{background:rgba(0,0,0,0.4);border:2px solid #c9a84c;border-radius:12px;padding:10px 12px 14px;overflow:visible}
-.htit{font-size:12px;color:#c9a84c;margin-bottom:8px;font-weight:700;letter-spacing:1px}
+.htit{font-size:14px;color:#c9a84c;margin-bottom:8px;font-weight:700;letter-spacing:1px}
 .hscr{overflow-x:auto;overflow-y:visible;padding-top:8px;padding-bottom:4px}
 .card{border-radius:7px;flex-shrink:0;position:relative;display:flex;flex-direction:column;justify-content:space-between;padding:2px 3px;user-select:none;overflow:hidden;background:white;border:1.5px solid #bbb}
 .card.sel{box-shadow:0 0 0 2px #f39c12,0 4px 14px rgba(0,0,0,0.4)}
@@ -55,7 +55,7 @@ button,input{font-family:Georgia,serif;cursor:pointer}
 .pip{position:absolute;transform:translate(-50%,-50%)}
 @keyframes pulse{0%{filter:drop-shadow(0 0 6px #f0d060)}100%{filter:drop-shadow(0 0 16px #f0d060)}}
 @keyframes spin{to{transform:rotate(360deg)}}
-.cbanner{position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#8b1a1a,#c0392b);border-bottom:2px solid #f0d060;padding:10px 16px;display:flex;align-items:center;justify-content:space-between}
+.cbanner{position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#8b1a1a,#c0392b);border-bottom:2px solid #f0d060;padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
 .ctmr{font-size:24px;font-weight:900;min-width:28px;text-align:center}
 .ctmr.urg{color:#ff4444}.ctmr.ok{color:#f0d060}
 .bpegar{background:#f0d060;border:none;border-radius:8px;color:#1a1a1a;font-weight:900;font-size:14px;padding:8px 16px;transition:all 0.2s}
@@ -71,15 +71,14 @@ button,input{font-family:Georgia,serif;cursor:pointer}
 </head>
 <body>
 <div id="app"></div>
-
-  <script>
+<script>
 var SRV="https://pontinho-server-production.up.railway.app";
 var CC=["#f0d060","#7ab87a","#e07070","#70b0e0","#c07ad0","#e09050"];
 var RANKS=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
-var SC={"♥":"#cc1111","♦":"#cc1111","♠":"#111","♣":"#111","★":"#e74c3c"};
+var SC={"♠":"#111","♣":"#2a6e2a","♥":"#cc1111","♦":"#cc1111","★":"#e74c3c"};
 var PL={"A":[[50,50]],"2":[[50,22],[50,78]],"3":[[50,20],[50,50],[50,80]],"4":[[25,22],[75,22],[25,78],[75,78]],"5":[[25,20],[75,20],[50,50],[25,80],[75,80]],"6":[[25,20],[75,20],[25,50],[75,50],[25,80],[75,80]],"7":[[25,18],[75,18],[50,36],[25,55],[75,55],[25,76],[75,76]],"8":[[25,16],[75,16],[25,38],[75,38],[25,62],[75,62],[25,84],[75,84]],"9":[[25,15],[75,15],[25,35],[75,35],[50,50],[25,65],[75,65],[25,85],[75,85]],"10":[[25,13],[75,13],[50,28],[25,42],[75,42],[25,58],[75,58],[50,72],[25,87],[75,87]]};
 var FI={"J":"♟","Q":"♛","K":"♚"};
-var SZ={tiny:{w:32,h:46,c:9,p:8,f:15,r:4},small:{w:48,h:68,c:12,p:12,f:22,r:6},normal:{w:64,h:90,c:15,p:16,f:32,r:7},large:{w:76,h:108,c:18,p:19,f:38,r:9}};
+var SZ={tiny:{w:38,h:54,c:11,p:10,f:18,r:5},small:{w:56,h:80,c:14,p:14,f:26,r:7},normal:{w:72,h:102,c:17,p:18,f:36,r:8},large:{w:88,h:124,c:21,p:22,f:44,r:10}};
 var sock=null;
 var st={screen:"home",myName:"",joinCode:"",roomCode:"",players:[],isCreator:false,playerIdx:0,error:"",game:null,sel:[],chat:[],claim:null,hlIds:new Set(),lastMeldOrder:null,localHandOrder:[]};
 function getSock(){
@@ -112,13 +111,25 @@ function getSock(){
     sock.on("playerJoined",function(d){st.players=d.players;render();});
     sock.on("gameStarted",function(){st.screen="game";render();});
     sock.on("chatMessages",function(m){st.chat=m;rchat();});
-    sock.on("discardClaimOpen",function(c){st.claim=c;startTimer();render();});
+    sock.on("discardClaimOpen",function(c){
+      st.claim=c;
+      st.claim.votes=c.votes||{};
+      st.claim.myVote=null;
+      render();
+    });
     sock.on("discardClaimResolved",function(d){
       st.claim=null;
       if(d&&d.message&&st.game)st.game.message=d.message;
       render();
     });
-    sock.on("discardClaimUpdate",function(d){if(st.claim)st.claim.claims=d.claims;});
+    sock.on("discardVoteUpdate",function(d){
+      if(st.claim){
+        st.claim.votes=d.votes||{};
+        st.claim.lastVoter=d.voterName;
+        st.claim.lastVote=d.vote;
+        render();
+      }
+    });
     sock.on("error",function(m){alert(m);});
     sock.on("disconnect",function(){console.log("Disconnected");});
     sock.on("connect",function(){
@@ -130,16 +141,6 @@ function getSock(){
   return sock;
 }
 var timerIv=null;
-function startTimer(){
-  if(timerIv)clearInterval(timerIv);
-  timerIv=setInterval(function(){
-    if(!st.claim){clearInterval(timerIv);return;}
-    var l=Math.max(0,Math.ceil((st.claim.deadline-Date.now())/1000));
-    var el=document.getElementById("ctmr");
-    if(el){el.textContent=l;el.className="ctmr "+(l<=3?"urg":"ok");}
-    if(l===0)clearInterval(timerIv);
-  },200);
-}
 function mkcard(c,sz,sel){
   if(!c)return"";
   var d=SZ[sz]||SZ.normal;
@@ -151,7 +152,7 @@ function mkcard(c,sz,sel){
   var wcls=(isWild?"wc":"")+(sel?" sel":"");
   var bdr=sel?"border:2.5px solid #f39c12":"";
   var shd=sel?"box-shadow:0 0 0 2px #f39c12,0 4px 14px rgba(0,0,0,0.4)":"box-shadow:0 2px 5px rgba(0,0,0,0.2)";
-  var tr=sel?"transform:translateY(-12px) scale(1.07)":"";
+  var tr=sel?"transform:translateY(-14px) scale(1.07)":"";
   var ctr="";
   if(c.isJoker){
     ctr='<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:'+Math.round(d.f*0.8)+'px">&#x1F0CF;</div>';
@@ -160,7 +161,7 @@ function mkcard(c,sz,sel){
     ctr='<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;line-height:1"><div style="font-size:'+Math.round(d.p*1.1)+'px;font-weight:900;color:'+wc+'">'+c.wildCard.rank+'</div><div style="font-size:'+Math.round(d.p*1.3)+'px;color:'+wc+'">'+c.wildCard.suit+'</div><div style="font-size:'+Math.round(d.p*0.8)+'px;color:#b07000;font-weight:700">&#9733;</div></div>';
   }else if(rank==="J"||rank==="Q"||rank==="K"){
     var ic=FI[rank]||rank;
-    ctr='<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;line-height:1;gap:1px"><div style="font-size:'+Math.round(d.f*0.72)+'px;color:#111;line-height:1">'+ic+'</div><div style="font-size:'+Math.round(d.f*0.38)+'px;color:'+col+';font-weight:700">'+rank+'</div><div style="font-size:'+Math.round(d.p*0.85)+'px;color:'+col+'">'+suit+'</div></div>';
+    ctr='<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;line-height:1;gap:1px"><div style="font-size:'+Math.round(d.f*0.72)+'px;color:'+col+';line-height:1">'+ic+'</div><div style="font-size:'+Math.round(d.f*0.38)+'px;color:'+col+';font-weight:700">'+rank+'</div><div style="font-size:'+Math.round(d.p*0.85)+'px;color:'+col+'">'+suit+'</div></div>';
   }else{
     var pips=PL[rank]||[[50,50]];
     var ip=d.c+4,iw=d.w-ip*2,ih=d.h-ip*2;
@@ -182,19 +183,19 @@ function mkmeld(m,mi,pi,own,hl){
   var cards=m.cards||[];
   var ch="";
   if(m.type==="run"){
-    var OV=24,n=cards.length,tw=n<=1?76:OV*(n-1)+76;
+    var OV=28,n=cards.length,tw=n<=1?88:OV*(n-1)+88;
     var cd=cards.map(function(c,i){
       var glow=(st.hlIds&&st.hlIds.has&&st.hlIds.has(c.id))?"filter:drop-shadow(0 0 8px #f0d060)":"";
       return'<div style="position:absolute;left:'+i*OV+'px;z-index:'+i+';'+glow+'">'+mkcard(c,"large",false)+'</div>';
     }).join("");
-    ch='<div style="position:relative;width:'+tw+'px;height:108px;flex-shrink:0">'+cd+'</div>';
+    ch='<div style="position:relative;width:'+tw+'px;height:124px;flex-shrink:0">'+cd+'</div>';
   }else{
     var grp={},ord=[];
     cards.forEach(function(c){if(!grp[c.suit]){grp[c.suit]=[];ord.push(c.suit);}grp[c.suit].push(c);});
     var mx=1;ord.forEach(function(s){if(grp[s].length>mx)mx=grp[s].length;});
-    var PO=10,cH=108+(mx-1)*PO,tw2=0,ph="";
+    var PO=12,cH=124+(mx-1)*PO,tw2=0,ph="";
     ord.forEach(function(suit){
-      var pile=grp[suit],x=tw2;tw2+=82;
+      var pile=grp[suit],x=tw2;tw2+=94;
       if(pile.length===1){
         var glow=(st.hlIds&&st.hlIds.has&&st.hlIds.has(pile[0].id))?"filter:drop-shadow(0 0 8px #f0d060)":"";
         ph+='<div style="position:absolute;left:'+x+'px;top:'+(mx-1)*PO+'px;'+glow+'">'+mkcard(pile[0],"large",false)+'</div>';
@@ -235,16 +236,20 @@ function atm(pi,mi){if(!st.sel.length)return;var ids=st.sel.slice();getSock().em
 function dc(){if(st.sel.length!==1){alert("Selecione exatamente 1 carta para descartar.");return;}var id=st.sel[0];st.sel=[];getSock().emit("discardCard",{cardId:id});}
 function rd(){getSock().emit("returnDiscard");st.sel=[];}
 function nr(){getSock().emit("nextRound");}
-function clmd(){
-  getSock().emit("claimDiscard");
-  var btn=document.querySelector(".bpegar");
-  if(btn){btn.classList.add("clicked");btn.textContent="✓ Enviado!";}
+function voteYes(){
+  if(!st.claim||st.claim.myVote)return;
+  st.claim.myVote="yes";
+  getSock().emit("voteDiscard",{vote:"yes"});
+  render();
+}
+function voteNo(){
+  if(!st.claim||st.claim.myVote)return;
+  st.claim.myVote="no";
+  getSock().emit("voteDiscard",{vote:"no"});
+  render();
 }
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
-
-
-
-    function render(){
+  function render(){
   var app=document.getElementById("app");
   if(st.screen==="home")app.innerHTML=rHome();
   else if(st.screen==="join")app.innerHTML=rJoin();
@@ -281,14 +286,14 @@ function rGame(){
   var td=g.discard&&g.discard.length>0?g.discard[g.discard.length-1]:null;
   var wl=g.cutCard?RANKS[(RANKS.indexOf(g.cutCard.rank)+1)%RANKS.length]+g.cutCard.suit:"";
   var hand=mp?mp.hand:[];
-  var OV=28,hw=hand.length<=1?76:OV*(hand.length-1)+76;
+  var OV=32,hw=hand.length<=1?88:OV*(hand.length-1)+88;
   var hc=hand.map(function(c,i){
     var s=st.sel.indexOf(c.id)>=0,t=s?0:10;
     var isClaimed=isMe&&g.claimedDiscardCardId&&c.id===g.claimedDiscardCardId;
     var claimedBadge=isClaimed?'<div style="position:absolute;top:-18px;left:0;right:0;text-align:center;font-size:9px;background:#f0d060;color:#111;border-radius:3px;padding:1px 2px;font-weight:700">USE ESTA</div>':"";
-    var arrowRow=s?'<div style="display:flex;justify-content:space-between;width:76px;margin-top:3px">'+
-      (i>0?'<button onclick="event.stopPropagation();moveCard('+i+',-1)" style="background:#c9a84c;border:none;border-radius:3px;color:#111;font-size:11px;padding:1px 5px;font-weight:700;cursor:pointer">&#9664;</button>':'<span style="width:24px;display:inline-block"></span>')+
-      (i<hand.length-1?'<button onclick="event.stopPropagation();moveCard('+i+',1)" style="background:#c9a84c;border:none;border-radius:3px;color:#111;font-size:11px;padding:1px 5px;font-weight:700;cursor:pointer">&#9654;</button>':'<span style="width:24px;display:inline-block"></span>')+
+    var arrowRow=s?'<div style="display:flex;justify-content:space-between;width:88px;margin-top:3px">'+
+      (i>0?'<button onclick="event.stopPropagation();moveCard('+i+',-1)" style="background:#c9a84c;border:none;border-radius:3px;color:#111;font-size:12px;padding:2px 7px;font-weight:700;cursor:pointer">&#9664;</button>':'<span style="width:28px;display:inline-block"></span>')+
+      (i<hand.length-1?'<button onclick="event.stopPropagation();moveCard('+i+',1)" style="background:#c9a84c;border:none;border-radius:3px;color:#111;font-size:12px;padding:2px 7px;font-weight:700;cursor:pointer">&#9654;</button>':'<span style="width:28px;display:inline-block"></span>')+
       '</div>':'';
     return'<div style="position:absolute;left:'+i*OV+'px;top:'+t+'px;z-index:'+(s?50+i:i)+';transition:top 0.12s;filter:'+(s?"drop-shadow(0 0 6px #f39c12)":isClaimed?"drop-shadow(0 0 8px #f0d060)":"none")+'">'+claimedBadge+mkcardC(c,"large",s,c.id)+arrowRow+'</div>';
   }).join("");
@@ -319,9 +324,9 @@ function rGame(){
     return'<div><span style="font-weight:700;color:'+CC[i%CC.length]+'">'+esc(m.sender)+':</span> <span style="color:#e8dfc0">'+esc(m.text)+'</span></div>';
   }).join("");
   var ban=st.claim?rbanner():"";
-  var notme=(!isMe&&!re)?'<div style="text-align:center;color:#7ab87a;font-size:12px;padding:4px">Vez de '+esc(g.players[cp].name)+'</div>':"";
+  var notme=(!isMe&&!re)?'<div style="text-align:center;color:#7ab87a;font-size:13px;padding:4px">Vez de '+esc(g.players[cp].name)+'</div>':"";
   return ban+
-    '<div class="game" style="'+(st.claim?"padding-top:70px":"")+'">' +
+    '<div class="game" style="'+(st.claim?"padding-top:90px":"")+'">' +
     '<div style="position:relative;height:'+cH+'px;min-width:320px;overflow:visible">'+
       '<svg style="position:absolute;top:0;left:0;width:100%;height:'+cH+'px;pointer-events:none">'+
         '<ellipse cx="'+CX+'" cy="'+CY+'" rx="'+(RX-14)+'" ry="'+(RY-10)+'" fill="none" stroke="#2a5a30" stroke-width="1" stroke-dasharray="4 4"/>'+
@@ -342,7 +347,7 @@ function rGame(){
       '<div class="dslot"><div class="dlbl">DESCARTE</div>'+
         '<div onclick="'+(isMe&&g.turnPhase==="draw"&&td?"dfd()":"")+'">'+
           (td?'<div style="'+(st.claim?"animation:pulse 0.8s infinite alternate":"")+'">'+mkcard(td,"normal",false)+'</div>':
-          '<div style="width:64px;height:90px;border-radius:7px;border:1.5px dashed #3a6640;display:flex;align-items:center;justify-content:center;color:#3a6640;font-size:11px">vazio</div>')+
+          '<div style="width:72px;height:102px;border-radius:8px;border:1.5px dashed #3a6640;display:flex;align-items:center;justify-content:center;color:#3a6640;font-size:12px">vazio</div>')+
         '</div>'+
       '</div>'+
       (g.cutCard?'<div class="dslot"><div class="dlbl">VIRADA</div>'+mkcard(g.cutCard,"normal",false)+'<div class="dwild">&#9733; '+wl+'</div></div>':"")+
@@ -351,12 +356,12 @@ function rGame(){
     reh+
     '<div class="hbox">'+
       '<div class="htit">&#9995; '+(mp?esc(mp.name):"")+' &#8212; sua m&#227;o '+
-        '<span style="font-size:10px;color:#7ab87a;font-weight:400;margin-left:8px">'+(isMe?"sua vez!":"aguarde sua vez")+'</span>'+
+        '<span style="font-size:11px;color:#7ab87a;font-weight:400;margin-left:8px">'+(isMe?"sua vez!":"aguarde sua vez")+'</span>'+
       '</div>'+
       '<div class="hscr">'+
         (hand.length===0
-          ?'<span style="color:#f0d060;font-weight:700;font-size:14px">M&#227;o vazia &#8212; voc&#234; bateu!</span>'
-          :'<div style="position:relative;width:'+hw+'px;height:145px">'+hc+'</div>')+
+          ?'<span style="color:#f0d060;font-weight:700;font-size:15px">M&#227;o vazia &#8212; voc&#234; bateu!</span>'
+          :'<div style="position:relative;width:'+hw+'px;height:165px">'+hc+'</div>')+
       '</div>'+
     '</div>'+
     '<div class="chat">'+
@@ -371,18 +376,35 @@ function rGame(){
 }
 function rbanner(){
   var c=st.claim;if(!c)return"";
-  var l=Math.max(0,Math.ceil((c.deadline-Date.now())/1000));
   var isd=c.discardingPlayerIdx===st.playerIdx;
-  var alr=c.claims&&c.claims.some(function(x){return x.playerIdx===st.playerIdx;});
-  var clms=c.claims&&c.claims.length>0?c.claims.map(function(x){return x.name;}).join(", ")+" quer pegar":"Ningu&#233;m reivindicou ainda";
   var discName=c.discardingPlayerName?esc(c.discardingPlayerName):"";
-  return'<div class="cbanner">'+
-    '<div><div style="color:#f0d060;font-weight:700;font-size:14px">&#x1F0CF; '+discName+' descartou! Veja o descarte</div>'+
-    '<div style="color:#ffcccc;font-size:12px">'+clms+'</div></div>'+
-    '<div style="display:flex;align-items:center;gap:8px">'+
-      '<div id="ctmr" class="ctmr '+(l<=3?"urg":"ok")+'">'+l+'</div>'+
-      (!isd&&!alr?'<button class="bpegar" onclick="clmd()">PEGAR!</button>':alr?'<div style="color:#90ee90;font-size:12px;font-weight:700">&#x2713; Quer pegar</div>':"")+
-    '</div></div>';
+  var votes=c.votes||{};
+  var voteRows="";
+  if(st.game){
+    st.game.players.forEach(function(p,i){
+      if(i===c.discardingPlayerIdx)return;
+      var v=votes[i];
+      var icon=v==="yes"?"&#x2705;":v==="no"?"&#x274C;":"&#x23F3;";
+      var col=v==="yes"?"#90ee90":v==="no"?"#ff9999":"#aaa";
+      voteRows+='<span style="color:'+col+';font-size:13px;margin-right:10px">'+icon+' '+esc(p.name)+'</span>';
+    });
+  }
+  var myVote=c.myVote;
+  var btns=(!isd&&!myVote)?
+    '<div style="display:flex;gap:8px">'+
+    '<button onclick="voteYes()" style="background:#2ecc71;border:none;border-radius:8px;color:#fff;font-weight:900;font-size:16px;padding:10px 22px">SIM &#x2705;</button>'+
+    '<button onclick="voteNo()" style="background:#e74c3c;border:none;border-radius:8px;color:#fff;font-weight:900;font-size:16px;padding:10px 22px">N&#xC3;O &#x274C;</button>'+
+    '</div>':
+    myVote==="yes"?'<div style="color:#90ee90;font-size:15px;font-weight:700">&#x2705; Sim</div>':
+    myVote==="no"?'<div style="color:#ff9999;font-size:15px;font-weight:700">&#x274C; N&#xE3;o</div>':
+    isd?'<div style="color:#f0d060;font-size:13px">Aguardando votos...</div>':"";
+  return'<div class="cbanner" style="flex-direction:column;align-items:flex-start;gap:8px">'+
+    '<div style="display:flex;justify-content:space-between;width:100%;align-items:center;flex-wrap:wrap;gap:8px">'+
+      '<div style="color:#f0d060;font-weight:700;font-size:15px">&#x1F0CF; Quer a carta de '+discName+'? Veja o descarte!</div>'+
+      btns+
+    '</div>'+
+    '<div>'+voteRows+'</div>'+
+  '</div>';
 }
 function rchat(){
   var el=document.getElementById("cm");if(!el)return;
